@@ -7,7 +7,7 @@ const state = {
   clients: [],
   selectedClient: null,
   contents: [],
-  currentView: 'dashboard', // dashboard, clients, contents, generate
+  currentView: 'dashboard', // dashboard, clients, contents, generate, customize
 };
 
 // API 기본 경로
@@ -45,6 +45,9 @@ function renderApp() {
               </button>
               <button onclick="setView('generate')" class="px-4 py-2 rounded hover:bg-gray-100 bg-blue-500 text-white" id="nav-generate">
                 <i class="fas fa-magic mr-2"></i>AI 생성
+              </button>
+              <button onclick="setView('customize')" class="px-4 py-2 rounded hover:bg-gray-100" id="nav-customize">
+                <i class="fas fa-paint-brush mr-2"></i>블로그 꾸미기
               </button>
             </nav>
           </div>
@@ -95,6 +98,9 @@ function updateView() {
       break;
     case 'generate':
       renderGenerate(content);
+      break;
+    case 'customize':
+      renderCustomize(content);
       break;
   }
 }
@@ -519,8 +525,24 @@ async function publishContent(id) {
   if (!confirm('이 콘텐츠를 워드프레스에 발행하시겠습니까?')) return;
 
   try {
-    await axios.post(`${API_BASE}/contents/${id}/publish`);
-    showNotification('콘텐츠가 발행되었습니다!', 'success');
+    // 개발 환경 감지: localhost 또는 sandbox URL
+    const isDevelopment = window.location.hostname === 'localhost' || 
+                          window.location.hostname.includes('sandbox') ||
+                          window.location.hostname.includes('127.0.0.1');
+    
+    // 시뮬레이션 모드 사용 (개발 환경)
+    const url = isDevelopment 
+      ? `${API_BASE}/contents/${id}/publish?simulation=true`
+      : `${API_BASE}/contents/${id}/publish`;
+    
+    const response = await axios.post(url);
+    
+    if (response.data.data?.simulation) {
+      showNotification('✅ 시뮬레이션 모드: DB 상태가 "발행완료"로 변경되었습니다\n(실제 워드프레스 발행은 프로덕션 환경에서만 작동합니다)', 'success');
+    } else {
+      showNotification('콘텐츠가 워드프레스에 발행되었습니다!', 'success');
+    }
+    
     loadContents();
   } catch (error) {
     showNotification(error.response?.data?.error || '발행에 실패했습니다', 'error');
@@ -1012,4 +1034,259 @@ function showNotification(message, type = 'info') {
   setTimeout(() => {
     notification.remove();
   }, 3000);
+}
+
+// 블로그 꾸미기 페이지 렌더링
+function renderCustomize(container) {
+  container.innerHTML = `
+    <div class="bg-white rounded-lg shadow p-6">
+      <h2 class="text-2xl font-bold mb-6">
+        <i class="fas fa-paint-brush mr-2 text-purple-500"></i>블로그 꾸미기
+      </h2>
+
+      <!-- 업체 선택 -->
+      <div class="mb-6">
+        <label class="block text-sm font-medium mb-2">꾸밀 블로그 선택</label>
+        <select id="customize-client-select" class="w-full border rounded px-3 py-2" onchange="loadCustomizerSettings()">
+          <option value="">업체를 선택하세요</option>
+          ${state.clients.map(client => `
+            <option value="${client.id}">${client.name} - ${client.wordpress_url}</option>
+          `).join('')}
+        </select>
+      </div>
+
+      <div id="customizer-content" class="hidden">
+        <!-- 탭 메뉴 -->
+        <div class="flex border-b mb-6">
+          <button onclick="switchCustomizerTab('appearance')" class="px-6 py-3 border-b-2 border-purple-500 font-semibold text-purple-600" id="tab-appearance">
+            <i class="fas fa-palette mr-2"></i>디자인
+          </button>
+          <button onclick="switchCustomizerTab('colors')" class="px-6 py-3 text-gray-600 hover:text-gray-900" id="tab-colors">
+            <i class="fas fa-fill-drip mr-2"></i>색상
+          </button>
+          <button onclick="switchCustomizerTab('settings')" class="px-6 py-3 text-gray-600 hover:text-gray-900" id="tab-settings">
+            <i class="fas fa-cog mr-2"></i>설정
+          </button>
+        </div>
+
+        <!-- 디자인 탭 -->
+        <div id="customizer-appearance" class="customizer-tab">
+          <h3 class="text-lg font-semibold mb-4">
+            <i class="fas fa-palette mr-2"></i>테마 및 레이아웃
+          </h3>
+          
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <!-- 테마 카드 예시 -->
+            <div class="border-2 border-gray-200 rounded-lg p-4 hover:border-purple-500 cursor-pointer">
+              <div class="bg-gray-100 h-32 rounded mb-3 flex items-center justify-center">
+                <i class="fas fa-image text-4xl text-gray-400"></i>
+              </div>
+              <h4 class="font-semibold">클래식 테마</h4>
+              <p class="text-xs text-gray-500">깔끔한 블로그 레이아웃</p>
+              <button class="mt-2 w-full px-3 py-1 bg-purple-500 text-white text-sm rounded hover:bg-purple-600" onclick="showNotification('테마 변경은 워드프레스 대시보드에서 직접 설정해주세요', 'info')">
+                선택
+              </button>
+            </div>
+            
+            <div class="border-2 border-gray-200 rounded-lg p-4 hover:border-purple-500 cursor-pointer">
+              <div class="bg-gray-100 h-32 rounded mb-3 flex items-center justify-center">
+                <i class="fas fa-image text-4xl text-gray-400"></i>
+              </div>
+              <h4 class="font-semibold">모던 테마</h4>
+              <p class="text-xs text-gray-500">세련된 디자인</p>
+              <button class="mt-2 w-full px-3 py-1 bg-purple-500 text-white text-sm rounded hover:bg-purple-600" onclick="showNotification('테마 변경은 워드프레스 대시보드에서 직접 설정해주세요', 'info')">
+                선택
+              </button>
+            </div>
+            
+            <div class="border-2 border-gray-200 rounded-lg p-4 hover:border-purple-500 cursor-pointer">
+              <div class="bg-gray-100 h-32 rounded mb-3 flex items-center justify-center">
+                <i class="fas fa-image text-4xl text-gray-400"></i>
+              </div>
+              <h4 class="font-semibold">미니멀 테마</h4>
+              <p class="text-xs text-gray-500">심플한 레이아웃</p>
+              <button class="mt-2 w-full px-3 py-1 bg-purple-500 text-white text-sm rounded hover:bg-purple-600" onclick="showNotification('테마 변경은 워드프레스 대시보드에서 직접 설정해주세요', 'info')">
+                선택
+              </button>
+            </div>
+          </div>
+
+          <div class="bg-blue-50 border-2 border-blue-200 rounded p-4">
+            <p class="text-sm text-blue-900">
+              <i class="fas fa-info-circle mr-2"></i>
+              <strong>참고:</strong> 테마 변경은 워드프레스 대시보드에서 직접 설정할 수 있습니다.
+            </p>
+            <a id="wp-dashboard-link" href="#" target="_blank" class="inline-block mt-2 text-blue-600 hover:underline text-sm">
+              <i class="fas fa-external-link-alt mr-1"></i>워드프레스 대시보드 열기
+            </a>
+          </div>
+        </div>
+
+        <!-- 색상 탭 -->
+        <div id="customizer-colors" class="customizer-tab hidden">
+          <h3 class="text-lg font-semibold mb-4">
+            <i class="fas fa-fill-drip mr-2"></i>색상 설정
+          </h3>
+          
+          <form id="color-form" class="space-y-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-medium mb-2">주요 색상 (Primary)</label>
+                <input type="color" name="primary_color" value="#2563eb" class="w-full h-12 border rounded">
+              </div>
+              
+              <div>
+                <label class="block text-sm font-medium mb-2">보조 색상 (Secondary)</label>
+                <input type="color" name="secondary_color" value="#7c3aed" class="w-full h-12 border rounded">
+              </div>
+              
+              <div>
+                <label class="block text-sm font-medium mb-2">텍스트 색상</label>
+                <input type="color" name="text_color" value="#1f2937" class="w-full h-12 border rounded">
+              </div>
+              
+              <div>
+                <label class="block text-sm font-medium mb-2">배경 색상</label>
+                <input type="color" name="background_color" value="#ffffff" class="w-full h-12 border rounded">
+              </div>
+            </div>
+
+            <div class="bg-yellow-50 border-2 border-yellow-200 rounded p-4">
+              <p class="text-sm text-yellow-900">
+                <i class="fas fa-exclamation-triangle mr-2"></i>
+                <strong>주의:</strong> 색상 적용은 테마에 따라 다르게 작동할 수 있습니다.
+              </p>
+            </div>
+
+            <button type="submit" class="px-6 py-2 bg-purple-500 text-white rounded hover:bg-purple-600">
+              <i class="fas fa-save mr-2"></i>색상 저장
+            </button>
+          </form>
+        </div>
+
+        <!-- 설정 탭 -->
+        <div id="customizer-settings" class="customizer-tab hidden">
+          <h3 class="text-lg font-semibold mb-4">
+            <i class="fas fa-cog mr-2"></i>사이트 설정
+          </h3>
+          
+          <form id="settings-form" class="space-y-4">
+            <div>
+              <label class="block text-sm font-medium mb-2">사이트 제목</label>
+              <input type="text" name="title" placeholder="내 블로그" class="w-full border rounded px-3 py-2" id="site-title">
+            </div>
+            
+            <div>
+              <label class="block text-sm font-medium mb-2">사이트 설명 (태그라인)</label>
+              <input type="text" name="description" placeholder="짧은 소개글을 입력하세요" class="w-full border rounded px-3 py-2" id="site-description">
+            </div>
+
+            <div class="bg-green-50 border-2 border-green-200 rounded p-4">
+              <p class="text-sm text-green-900">
+                <i class="fas fa-lightbulb mr-2"></i>
+                <strong>팁:</strong> 사이트 제목과 설명은 SEO에 중요한 역할을 합니다.
+              </p>
+            </div>
+
+            <button type="submit" class="px-6 py-2 bg-purple-500 text-white rounded hover:bg-purple-600">
+              <i class="fas fa-save mr-2"></i>설정 저장
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // 색상 폼 제출 핸들러
+  const colorForm = document.getElementById('color-form');
+  if (colorForm) {
+    colorForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const formData = new FormData(e.target);
+      const clientId = document.getElementById('customize-client-select').value;
+      
+      if (!clientId) {
+        showNotification('업체를 선택해주세요', 'error');
+        return;
+      }
+
+      const data = Object.fromEntries(formData);
+      
+      try {
+        await axios.post(`${API_BASE}/customizer/clients/${clientId}/colors`, data);
+        showNotification('색상 설정이 저장되었습니다', 'success');
+      } catch (error) {
+        showNotification('색상 저장에 실패했습니다', 'error');
+      }
+    });
+  }
+
+  // 설정 폼 제출 핸들러
+  const settingsForm = document.getElementById('settings-form');
+  if (settingsForm) {
+    settingsForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const formData = new FormData(e.target);
+      const clientId = document.getElementById('customize-client-select').value;
+      
+      if (!clientId) {
+        showNotification('업체를 선택해주세요', 'error');
+        return;
+      }
+
+      const data = Object.fromEntries(formData);
+      
+      try {
+        await axios.put(`${API_BASE}/customizer/clients/${clientId}/settings`, data);
+        showNotification('설정이 업데이트되었습니다', 'success');
+      } catch (error) {
+        showNotification('설정 업데이트에 실패했습니다', 'error');
+      }
+    });
+  }
+}
+
+function loadCustomizerSettings() {
+  const clientId = document.getElementById('customize-client-select').value;
+  
+  if (!clientId) {
+    document.getElementById('customizer-content').classList.add('hidden');
+    return;
+  }
+
+  document.getElementById('customizer-content').classList.remove('hidden');
+  
+  const client = state.clients.find(c => c.id == clientId);
+  if (client) {
+    document.getElementById('wp-dashboard-link').href = `${client.wordpress_url}/wp-admin`;
+  }
+
+  // 설정 로드
+  axios.get(`${API_BASE}/customizer/clients/${clientId}/settings`)
+    .then(response => {
+      if (response.data.success) {
+        const settings = response.data.data;
+        document.getElementById('site-title').value = settings.name || '';
+        document.getElementById('site-description').value = settings.description || '';
+      }
+    })
+    .catch(error => {
+      console.error('설정 로드 실패:', error);
+    });
+}
+
+function switchCustomizerTab(tabName) {
+  // 모든 탭 버튼 비활성화
+  document.querySelectorAll('[id^="tab-"]').forEach(btn => {
+    btn.className = 'px-6 py-3 text-gray-600 hover:text-gray-900';
+  });
+  
+  // 모든 탭 내용 숨기기
+  document.querySelectorAll('.customizer-tab').forEach(tab => {
+    tab.classList.add('hidden');
+  });
+  
+  // 선택된 탭 활성화
+  document.getElementById(`tab-${tabName}`).className = 'px-6 py-3 border-b-2 border-purple-500 font-semibold text-purple-600';
+  document.getElementById(`customizer-${tabName}`).classList.remove('hidden');
 }

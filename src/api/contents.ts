@@ -348,6 +348,7 @@ app.post('/generate', async (c) => {
 app.post('/:id/publish', async (c) => {
   try {
     const id = c.req.param('id');
+    const simulationMode = c.req.query('simulation') === 'true';
 
     // 콘텐츠 조회
     const content = await c.env.DB.prepare(
@@ -367,6 +368,38 @@ app.post('/:id/publish', async (c) => {
       return c.json({ success: false, error: '클라이언트를 찾을 수 없습니다' }, 404);
     }
 
+    // 시뮬레이션 모드: 개발 환경에서 실제 발행 없이 테스트
+    if (simulationMode) {
+      // DB만 업데이트 (실제 워드프레스 발행은 건너뛰기)
+      await c.env.DB.prepare(`
+        UPDATE contents 
+        SET status = ?, wordpress_post_id = ?, published_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `).bind('published', 999999, id).run();
+
+      // 활동 로그 기록
+      await c.env.DB.prepare(`
+        INSERT INTO activity_logs (client_id, action, details, status)
+        VALUES (?, ?, ?, ?)
+      `).bind(
+        content.client_id,
+        'content_published',
+        `[시뮬레이션] 워드프레스 발행: ${content.title}`,
+        'success'
+      ).run();
+
+      return c.json({ 
+        success: true, 
+        data: { 
+          wordpress_post_id: 999999,
+          simulation: true,
+          message: '시뮬레이션 모드: DB만 업데이트됨 (실제 워드프레스 발행 안 됨)'
+        },
+        message: '콘텐츠가 발행되었습니다 (시뮬레이션)'
+      });
+    }
+
+    // 실제 워드프레스 발행 (프로덕션 모드)
     // 워드프레스 클라이언트 생성
     const wpClient = new WordPressClient({
       siteUrl: client.wordpress_url,

@@ -4,6 +4,7 @@ import { serveStatic } from 'hono/cloudflare-workers'
 import { renderer } from './renderer'
 import clientsApi from './api/clients'
 import contentsApi from './api/contents'
+import customizerApi from './api/wordpress-customizer'
 import { rateLimit, securityHeaders, csrfProtection } from './middleware/security'
 
 type Bindings = {
@@ -38,6 +39,7 @@ app.use('/static/*', serveStatic({ root: './public' }))
 // API 라우트
 app.route('/api/clients', clientsApi)
 app.route('/api/contents', contentsApi)
+app.route('/api/customizer', customizerApi)
 
 // 렌더러
 app.use(renderer)

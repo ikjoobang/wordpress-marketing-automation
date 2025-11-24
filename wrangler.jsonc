@@ -1,17 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "webapp",
-  "main": "src/index.tsx",
   "compatibility_date": "2025-11-24",
   "compatibility_flags": ["nodejs_compat"],
-  "pages_build_output_dir": "./dist",
-  
-  // D1 Database Configuration
-  "d1_databases": [
-    {
-      "binding": "DB",
-      "database_name": "webapp-production",
-      "database_id": "to-be-created"
-    }
-  ]
+  "pages_build_output_dir": "./dist"
 }

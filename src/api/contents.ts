@@ -10,6 +10,7 @@ import { validateContentGeneration } from '../middleware/security';
 
 type Bindings = {
   DB: D1Database;
+  OPENAI_API_KEY?: string;
 };
 
 const app = new Hono<{ Bindings: Bindings }>();
@@ -275,16 +276,19 @@ app.post('/generate', async (c) => {
       return c.json({ success: false, error: '클라이언트를 찾을 수 없습니다' }, 404);
     }
 
-    if (!client.openai_api_key) {
+    // 환경변수에서 OpenAI API 키 가져오기
+    const openaiApiKey = c.env.OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+    
+    if (!openaiApiKey) {
       return c.json({ success: false, error: 'OpenAI API 키가 설정되지 않았습니다' }, 400);
     }
 
     // 콘텐츠 생성
-    const systemPrompt = client.system_prompt || 
+    const systemPrompt = 
       'You are a professional content writer. Write engaging, SEO-optimized blog posts with proper HTML structure including H1, H2, H3 tags.';
 
     const generated = await generateContent(
-      client.openai_api_key,
+      openaiApiKey,
       systemPrompt,
       body.keywords,
       body.title
@@ -292,37 +296,24 @@ app.post('/generate', async (c) => {
 
     // 이미지 생성 (옵션)
     let imageUrl: string | undefined;
-    if (body.generate_image && client.openai_api_key) {
+    if (body.generate_image && openaiApiKey) {
       const imagePrompt = body.image_prompt || `Professional illustration for: ${generated.title}`;
-      imageUrl = await generateImage(client.openai_api_key, imagePrompt);
+      imageUrl = await generateImage(openaiApiKey, imagePrompt);
     }
 
     // DB에 저장
     const result = await c.env.DB.prepare(`
       INSERT INTO contents (
-        project_id, client_id, title, content, excerpt,
-        status, featured_image_url, keywords
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        client_id, title, content, 
+        status, image_url, keywords
+      ) VALUES (?, ?, ?, ?, ?, ?)
     `).bind(
-      body.project_id || null,
       body.client_id,
       generated.title,
       generated.content,
-      generated.excerpt,
       'draft',
       imageUrl || null,
       JSON.stringify(body.keywords)
-    ).run();
-
-    // 활동 로그 기록
-    await c.env.DB.prepare(`
-      INSERT INTO activity_logs (client_id, action, details, status)
-      VALUES (?, ?, ?, ?)
-    `).bind(
-      body.client_id,
-      'content_generated',
-      `AI 콘텐츠 생성: ${generated.title}`,
-      'success'
     ).run();
 
     return c.json({ 

@@ -353,6 +353,12 @@ async function loadContents() {
             </div>
           </div>
           <div class="flex space-x-2">
+            <button onclick="previewContent(${content.id})" class="text-blue-500 hover:text-blue-700" title="미리보기">
+              <i class="fas fa-eye"></i>
+            </button>
+            <button onclick="downloadContentTxt(${content.id})" class="text-purple-500 hover:text-purple-700" title="TXT 다운로드">
+              <i class="fas fa-download"></i>
+            </button>
             ${content.status === 'draft' ? `
               <button onclick="publishContent(${content.id})" class="text-green-500 hover:text-green-700" title="워드프레스에 발행">
                 <i class="fas fa-paper-plane"></i>
@@ -443,7 +449,6 @@ function renderGenerate(container) {
     const formData = new FormData(e.target);
     const data = {
       client_id: parseInt(formData.get('client_id')),
-      project_id: 1, // 임시 프로젝트 ID
       keywords: formData.get('keywords').split(',').map(k => k.trim()),
       title: formData.get('title') || undefined,
       generate_image: formData.get('generate_image') === 'on',
@@ -507,6 +512,73 @@ async function publishContent(id) {
   } catch (error) {
     showNotification(error.response?.data?.error || '발행에 실패했습니다', 'error');
   }
+}
+
+function previewContent(id) {
+  const content = state.contents.find(c => c.id === id);
+  if (!content) return;
+
+  const modalHtml = `
+    <div id="preview-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div class="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] flex flex-col">
+        <div class="p-6 border-b flex justify-between items-center">
+          <h3 class="text-xl font-bold">${content.title}</h3>
+          <button onclick="hidePreviewModal()" class="text-gray-500 hover:text-gray-700">
+            <i class="fas fa-times text-2xl"></i>
+          </button>
+        </div>
+        <div class="p-6 overflow-y-auto flex-1">
+          <div class="prose max-w-none">
+            ${content.content}
+          </div>
+        </div>
+        <div class="p-6 border-t flex justify-between items-center">
+          <div class="text-sm text-gray-500">
+            <span class="px-2 py-1 rounded ${getStatusColor(content.status)}">${getStatusText(content.status)}</span>
+            <span class="ml-4">${new Date(content.created_at).toLocaleString('ko-KR')}</span>
+          </div>
+          <div class="flex space-x-2">
+            <button onclick="downloadContentTxt(${content.id})" class="px-4 py-2 bg-purple-500 text-white rounded hover:bg-purple-600">
+              TXT 다운로드
+            </button>
+            ${content.status === 'draft' ? `
+              <button onclick="publishContent(${content.id}); hidePreviewModal();" class="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600">
+                워드프레스 발행
+              </button>
+            ` : ''}
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.body.insertAdjacentHTML('beforeend', modalHtml);
+}
+
+function hidePreviewModal() {
+  const modal = document.getElementById('preview-modal');
+  if (modal) modal.remove();
+}
+
+function downloadContentTxt(id) {
+  const content = state.contents.find(c => c.id === id);
+  if (!content) return;
+
+  const plainText = content.content.replace(/<[^>]*>/g, '\n').replace(/\n\n+/g, '\n\n').trim();
+  
+  const txtContent = `${content.title}\n${'='.repeat(content.title.length)}\n\n${plainText}\n\n---\n생성일시: ${new Date(content.created_at).toLocaleString('ko-KR')}\n상태: ${getStatusText(content.status)}`;
+
+  const blob = new Blob([txtContent], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${content.title.replace(/[^a-zA-Z0-9가-힣]/g, '_')}.txt`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  
+  showNotification('TXT 파일이 다운로드되었습니다', 'success');
 }
 
 async function deleteContent(id) {

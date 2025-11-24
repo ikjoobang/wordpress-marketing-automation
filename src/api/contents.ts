@@ -22,9 +22,76 @@ async function generateContent(
   keywords: string[],
   title?: string
 ): Promise<{ title: string; content: string; excerpt: string }> {
-  const prompt = title 
-    ? `다음 제목으로 블로그 글을 작성해주세요: "${title}"\n\n키워드: ${keywords.join(', ')}\n\nH1, H2, H3 태그를 적절히 사용하여 SEO 최적화된 HTML 형식으로 작성해주세요.`
-    : `다음 키워드를 중심으로 블로그 글을 작성해주세요: ${keywords.join(', ')}\n\nH1, H2, H3 태그를 적절히 사용하여 SEO 최적화된 HTML 형식으로 작성해주세요. 제목도 함께 생성해주세요.`;
+  
+  // SEO/AEO/C-RANK/GEO 최적화 프롬프트 생성
+  const optimizedPrompt = title 
+    ? `제목: "${title}"
+키워드: ${keywords.join(', ')}
+
+다음 요구사항을 모두 충족하는 블로그 글을 작성해주세요:
+
+■ SEO 최적화 (Search Engine Optimization):
+  - 제목에 주요 키워드 포함
+  - H1(제목), H2(주요 섹션), H3(하위 섹션) 구조화
+  - 키워드 밀도 2-3% 유지
+  - 메타 설명에 적합한 요약 제공
+  - 내부 링크 권장 위치 표시
+
+■ AEO 최적화 (Answer Engine Optimization):
+  - 질문-답변 형식으로 구조화
+  - 직접적이고 명확한 답변 제공
+  - "무엇", "어떻게", "왜" 질문에 대한 답변 포함
+  - FAQ 섹션 포함
+
+■ C-RANK 최적화 (신뢰도 강화):
+  - 전문 용어 정확히 사용
+  - 구체적인 수치와 데이터 포함
+  - 실용적인 팁과 베스트 프랙티스 제시
+  - 단계별 가이드 제공
+
+■ GEO 최적화 (지역 검색):
+  - 해당되는 경우 지역명 자연스럽게 포함
+  - "근처", "지역" 등 로컬 키워드 활용
+
+■ HTML 구조:
+  <h1>메인 제목</h1>
+  <h2>주요 섹션</h2>
+  <h3>하위 섹션</h3>
+  <p>본문 내용</p>
+  <ul><li>리스트 항목</li></ul>
+
+총 1500-2000자 분량으로 작성해주세요.`
+    : `키워드: ${keywords.join(', ')}
+
+다음 요구사항을 모두 충족하는 블로그 글을 작성해주세요:
+
+■ 제목 생성:
+  - 주요 키워드 포함
+  - 클릭을 유도하는 매력적인 제목
+  - 60자 이내
+
+■ SEO 최적화:
+  - H1, H2, H3 계층 구조
+  - 키워드 밀도 2-3%
+  - 메타 설명 적합한 요약
+
+■ AEO 최적화:
+  - Q&A 형식 포함
+  - 명확한 답변 제공
+  - FAQ 섹션
+
+■ C-RANK 최적화:
+  - 전문성 표현
+  - 구체적 데이터/수치
+  - 실용적 조언
+
+■ 구조:
+  <h1>제목</h1>
+  <h2>섹션</h2>
+  <h3>서브섹션</h3>
+  <p>내용</p>
+
+1500-2000자 분량으로 작성.`;
 
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
@@ -36,10 +103,10 @@ async function generateContent(
       model: 'gpt-4o-mini',
       messages: [
         { role: 'system', content: systemPrompt },
-        { role: 'user', content: prompt }
+        { role: 'user', content: optimizedPrompt }
       ],
       temperature: 0.7,
-      max_tokens: 2000,
+      max_tokens: 3000,
     }),
   });
 
@@ -176,7 +243,7 @@ app.post('/generate', async (c) => {
         status, featured_image_url, keywords
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
-      body.project_id,
+      body.project_id || null,
       body.client_id,
       generated.title,
       generated.content,

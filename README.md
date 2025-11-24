@@ -12,24 +12,31 @@
 - **워드프레스 사이트**: https://studiojuai.co.kr (또는 https://bang6655.mycafe24.com)
 - **GitHub 저장소**: https://github.com/ikjoobang/wordpress-marketing-automation
 
-## ✅ 완료된 기능 (Phase 1)
+## ✅ 완료된 기능 (Phase 1 + 최신 업데이트)
 
 ### ❶ 시스템 아키텍처
 - ✅ 워드프레스 REST API 연동 모듈 (완료)
 - ✅ Application Passwords 인증 방식 (완료)
 - ✅ Cloudflare D1 데이터베이스 스키마 (완료)
+- ✅ 보안 미들웨어 구현 (Rate limiting, CSRF, Input sanitization)
 
 ### ❷ 업체 관리 시스템
 - ✅ 업체 등록/수정/삭제 기능
 - ✅ 워드프레스 연결 정보 관리
 - ✅ 업체별 OpenAI API 키 관리
-- ✅ 업체별 시스템 프롬프트 설정
+- ✅ 업체별 시스템 프롬프트 설정 (실시간 수정 가능)
 - ✅ 업체별 통계 조회 기능
 
 ### ❸ AI 콘텐츠 생성 엔진
 - ✅ OpenAI GPT-4o-mini 기반 텍스트 생성
-- ✅ DALL-E 3 기반 이미지 생성
-- ✅ SEO 최적화 HTML 구조 (H1, H2, H3 태그)
+- ✅ DALL-E 3 기반 이미지 생성 (개선된 UI)
+- ✅ **실전 블로그 마케팅 전략 통합 프롬프트**
+  - SEO 최적화 (제목 최적화, H1-H3 구조, 키워드 밀도)
+  - AEO 최적화 (답변 중심, Q&A 형식, FAQ 섹션)
+  - C-RANK 최적화 (전문성 표현, 구체적 수치, 실용적 팁)
+  - GEO 최적화 (지역 타겟팅, 로컬 키워드)
+  - 독자 중심 작성 전략
+  - 행동 유도 (CTA) 전략
 - ✅ 업체별 맞춤 프롬프트 적용
 - ✅ 키워드 기반 콘텐츠 생성
 
@@ -38,6 +45,9 @@
 - ✅ 상태 관리 (임시저장, 예약, 발행완료, 실패)
 - ✅ 워드프레스 자동 발행 기능
 - ✅ 썸네일 이미지 자동 업로드
+- ✅ 콘텐츠 미리보기 (전체 HTML 렌더링)
+- ✅ **TXT 다운로드 기능** (HTML → Plain Text 변환)
+- ✅ **PDF 다운로드 기능** (jsPDF 라이브러리 활용)
 
 ### ❺ 통합 대시보드 UI
 - ✅ 반응형 웹 디자인 (Tailwind CSS)
@@ -45,7 +55,15 @@
 - ✅ 직관적인 네비게이션
 - ✅ 업체 관리 페이지
 - ✅ 콘텐츠 목록 페이지
-- ✅ AI 생성 페이지
+- ✅ **개선된 AI 생성 페이지** (이미지 생성 UI 명확화)
+- ✅ GenSpark 스타일 가이드 준수 (❶ ■ ✔️ 이모지 사용)
+
+### ❻ 보안 시스템
+- ✅ **Rate Limiting** (API 요청 1분당 60회 제한)
+- ✅ **CSRF Protection** (Same-origin 검증)
+- ✅ **Input Sanitization** (XSS 방어)
+- ✅ **Security Headers** (X-Content-Type-Options, X-Frame-Options, X-XSS-Protection)
+- ✅ **Content Validation** (콘텐츠 생성 시 입력값 검증)
 
 ## 📊 데이터 아키텍처
 
@@ -189,10 +207,24 @@ npm run deploy:prod
 
 ## 🔐 보안
 
-- ✅ Application Passwords 방식으로 워드프레스 인증
-- ✅ OpenAI API 키는 업체별로 분리 저장
+### 구현된 보안 기능
+- ✅ **Application Passwords** 방식으로 워드프레스 인증
+- ✅ **OpenAI API 키** 업체별로 분리 저장
+- ✅ **Rate Limiting** (1분당 60개 요청 제한)
+- ✅ **CSRF Protection** (Same-origin 검증)
+- ✅ **Input Sanitization** (XSS 공격 방어)
+- ✅ **Security Headers** 자동 추가
+  - X-Content-Type-Options: nosniff
+  - X-Frame-Options: DENY
+  - X-XSS-Protection: 1; mode=block
+  - Referrer-Policy: strict-origin-when-cross-origin
+  - Permissions-Policy: 위치/마이크/카메라 비활성화
+- ✅ **Content Validation** (입력값 검증 및 제한)
+
+### 권장사항
 - ⚠️ 프로덕션 환경에서는 비밀번호 암호화 권장
 - ⚠️ HTTPS 사용 필수
+- ⚠️ CORS 설정을 특정 도메인으로 제한
 
 ## 📈 다음 단계 권장사항
 
@@ -219,7 +251,22 @@ npm run deploy:prod
 - **플랫폼**: Cloudflare Pages (준비 완료)
 - **데이터베이스**: Cloudflare D1 (로컬 개발 환경 구축 완료)
 - **상태**: ✅ 개발 서버 실행 중
+- **개발 서버 URL**: https://3000-ig51ed43dayktcrmwppqa-c07dda5e.sandbox.novita.ai
 - **마지막 업데이트**: 2025-11-24
+
+### 최신 업데이트 내역 (2025-11-24)
+- ✅ 이미지 생성 UI 개선 (명확한 체크박스 및 프롬프트 입력란)
+- ✅ 블로그 마케팅 전문 프롬프트 재작성 (SEO/AEO/C-RANK/GEO 통합)
+- ✅ 보안 미들웨어 추가 (Rate limiting, CSRF, Input sanitization)
+- ✅ PDF 다운로드 기능 구현 (jsPDF)
+- ✅ TXT 다운로드 기능 완전 동작 확인
+- ✅ 전체 시스템 검증 완료
+  - 프론트엔드: ✅ 정상 작동
+  - 백엔드 API: ✅ 모든 엔드포인트 정상
+  - 데이터베이스: ✅ 마이그레이션 완료, 16개 컬럼 확인
+  - 보안 헤더: ✅ 적용 확인
+  - 정적 파일: ✅ 서빙 정상
+  - 다운로드: ✅ TXT/PDF 모두 정상
 
 ## 🤝 연동된 서비스
 

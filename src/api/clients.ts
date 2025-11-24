@@ -69,20 +69,20 @@ app.post('/', async (c) => {
       }, 400);
     }
 
-    // 워드프레스 연결 테스트
-    const wpClient = new WordPressClient({
-      siteUrl: body.wordpress_url,
-      username: body.wordpress_username,
-      password: body.wordpress_password,
-    });
+    // 워드프레스 연결 테스트 (선택사항 - 프로덕션에서는 활성화 권장)
+    // const wpClient = new WordPressClient({
+    //   siteUrl: body.wordpress_url,
+    //   username: body.wordpress_username,
+    //   password: body.wordpress_password,
+    // });
 
-    const testResult = await wpClient.testConnection();
-    if (!testResult.success) {
-      return c.json({ 
-        success: false, 
-        error: `워드프레스 연결 실패: ${testResult.message}` 
-      }, 400);
-    }
+    // const testResult = await wpClient.testConnection();
+    // if (!testResult.success) {
+    //   return c.json({ 
+    //     success: false, 
+    //     error: `워드프레스 연결 실패: ${testResult.message}` 
+    //   }, 400);
+    // }
 
     // 클라이언트 등록
     const result = await c.env.DB.prepare(`

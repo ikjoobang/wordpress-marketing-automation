@@ -521,6 +521,178 @@ async function deleteContent(id) {
   }
 }
 
+async function editClient(id) {
+  const client = state.clients.find(c => c.id === id);
+  if (!client) return;
+
+  // 수정 모달 생성
+  const modalHtml = `
+    <div id="edit-client-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div class="bg-white rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+        <h3 class="text-xl font-bold mb-4">업체 정보 수정</h3>
+        <form id="edit-client-form" class="space-y-4">
+          <input type="hidden" name="id" value="${client.id}">
+          
+          <div>
+            <label class="block text-sm font-medium mb-1">업체명 *</label>
+            <input type="text" name="name" value="${client.name}" required class="w-full border rounded px-3 py-2">
+          </div>
+          
+          <div>
+            <label class="block text-sm font-medium mb-1">설명</label>
+            <textarea name="description" rows="2" class="w-full border rounded px-3 py-2">${client.description || ''}</textarea>
+          </div>
+          
+          <div>
+            <label class="block text-sm font-medium mb-1">워드프레스 URL *</label>
+            <input type="url" name="wordpress_url" value="${client.wordpress_url}" required class="w-full border rounded px-3 py-2">
+          </div>
+          
+          <div>
+            <label class="block text-sm font-medium mb-1">워드프레스 사용자명 *</label>
+            <input type="text" name="wordpress_username" value="${client.wordpress_username}" required class="w-full border rounded px-3 py-2">
+          </div>
+          
+          <div>
+            <label class="block text-sm font-medium mb-1">Application Password *</label>
+            <input type="password" name="wordpress_password" value="${client.wordpress_password}" required class="w-full border rounded px-3 py-2">
+            <p class="text-xs text-gray-500 mt-1">워드프레스에서 생성한 Application Password를 입력하세요</p>
+          </div>
+          
+          <div>
+            <label class="block text-sm font-medium mb-1">OpenAI API Key</label>
+            <input type="password" name="openai_api_key" value="${client.openai_api_key || ''}" class="w-full border rounded px-3 py-2">
+          </div>
+          
+          <div>
+            <label class="block text-sm font-medium mb-1 flex items-center justify-between">
+              <span>시스템 프롬프트 (AI 작성 지침)</span>
+              <button type="button" onclick="showPromptHelp()" class="text-blue-500 text-xs hover:underline">
+                <i class="fas fa-question-circle mr-1"></i>예시 보기
+              </button>
+            </label>
+            <textarea name="system_prompt" rows="6" class="w-full border rounded px-3 py-2 font-mono text-sm" placeholder="AI가 콘텐츠를 생성할 때 따를 지침을 입력하세요...">${client.system_prompt || ''}</textarea>
+            <p class="text-xs text-gray-500 mt-1">
+              💡 SEO, AEO, C-RANK, GEO 최적화 등 원하는 전략을 입력하세요
+            </p>
+          </div>
+          
+          <div class="flex items-center">
+            <input type="checkbox" name="is_active" id="edit_is_active" ${client.is_active ? 'checked' : ''} class="mr-2">
+            <label for="edit_is_active" class="text-sm">활성 상태</label>
+          </div>
+          
+          <div class="flex justify-end space-x-2 pt-4">
+            <button type="button" onclick="hideEditClientModal()" class="px-4 py-2 border rounded hover:bg-gray-100">취소</button>
+            <button type="submit" class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">
+              <i class="fas fa-save mr-2"></i>저장
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  `;
+
+  // 기존 모달 제거
+  const existingModal = document.getElementById('edit-client-modal');
+  if (existingModal) existingModal.remove();
+
+  // 새 모달 추가
+  document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+  // 폼 제출 핸들러
+  document.getElementById('edit-client-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    const data = {};
+    
+    formData.forEach((value, key) => {
+      if (key !== 'id') {
+        if (key === 'is_active') {
+          data[key] = formData.get('is_active') === 'on';
+        } else {
+          data[key] = value || undefined;
+        }
+      }
+    });
+
+    try {
+      await axios.put(`${API_BASE}/clients/${client.id}`, data);
+      showNotification('업체 정보가 수정되었습니다', 'success');
+      hideEditClientModal();
+      await loadClients();
+      updateView();
+    } catch (error) {
+      showNotification(error.response?.data?.error || '수정에 실패했습니다', 'error');
+    }
+  });
+}
+
+function hideEditClientModal() {
+  const modal = document.getElementById('edit-client-modal');
+  if (modal) modal.remove();
+}
+
+function showPromptHelp() {
+  const helpText = `
+📝 시스템 프롬프트 예시
+
+━━━━━━━━━━━━━━━━━━━━━━━
+✅ 기본 템플릿:
+━━━━━━━━━━━━━━━━━━━━━━━
+You are a professional Korean content writer specializing in [분야]. 
+Write engaging, SEO-optimized blog posts with proper HTML structure (H1, H2, H3 tags). 
+Focus on providing valuable insights and actionable advice. 
+Use a professional yet approachable tone.
+
+━━━━━━━━━━━━━━━━━━━━━━━
+✅ SEO 최적화 템플릿:
+━━━━━━━━━━━━━━━━━━━━━━━
+Create SEO-optimized Korean blog posts for [업종]. 
+- Use H1 for main title, H2 for sections, H3 for subsections
+- Include target keywords naturally (2-3% density)
+- Write meta descriptions under 160 characters
+- Add internal linking suggestions
+- Create engaging introduction and strong CTA
+
+━━━━━━━━━━━━━━━━━━━━━━━
+✅ 지역 비즈니스 템플릿 (GEO):
+━━━━━━━━━━━━━━━━━━━━━━━
+Write local SEO content for [지역명] area [업종].
+- Mention local landmarks and area names
+- Use "near me" and location-based keywords
+- Include business hours and contact information
+- Add local customer testimonials style
+- Focus on community engagement
+
+━━━━━━━━━━━━━━━━━━━━━━━
+✅ 전문성 강화 템플릿 (C-RANK):
+━━━━━━━━━━━━━━━━━━━━━━━
+Write authoritative content showing expertise in [분야].
+- Cite reliable sources and statistics
+- Use professional terminology appropriately
+- Provide step-by-step guides
+- Include expert tips and best practices
+- Maintain consistent brand voice
+
+━━━━━━━━━━━━━━━━━━━━━━━
+✅ 검색 최적화 템플릿 (AEO):
+━━━━━━━━━━━━━━━━━━━━━━━
+Create content optimized for AI search engines and voice search.
+- Structure content in Q&A format
+- Provide direct, concise answers
+- Use natural language and conversational tone
+- Include "how to", "what is", "why" questions
+- Add FAQ section at the end
+  `;
+
+  alert(helpText);
+}
+
+function viewClientStats(id) {
+  showNotification('통계 기능은 곧 제공됩니다', 'info');
+}
+
 async function deleteClient(id) {
   if (!confirm('이 업체를 삭제하시겠습니까? 관련된 모든 데이터가 삭제됩니다.')) return;
 

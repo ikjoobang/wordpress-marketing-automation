@@ -10,6 +10,7 @@
 
 - **개발 서버**: https://3000-ig51ed43dayktcrmwppqa-c07dda5e.sandbox.novita.ai
 - **워드프레스 사이트**: https://studiojuai.co.kr (또는 https://bang6655.mycafe24.com)
+- **GitHub 저장소**: https://github.com/ikjoobang/wordpress-marketing-automation
 
 ## ✅ 완료된 기능 (Phase 1)
 

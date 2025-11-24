@@ -357,7 +357,10 @@ async function loadContents() {
               <i class="fas fa-eye"></i>
             </button>
             <button onclick="downloadContentTxt(${content.id})" class="text-purple-500 hover:text-purple-700" title="TXT 다운로드">
-              <i class="fas fa-download"></i>
+              <i class="fas fa-file-alt"></i>
+            </button>
+            <button onclick="downloadContentPdf(${content.id})" class="text-red-500 hover:text-red-700" title="PDF 다운로드">
+              <i class="fas fa-file-pdf"></i>
             </button>
             ${content.status === 'draft' ? `
               <button onclick="publishContent(${content.id})" class="text-green-500 hover:text-green-700" title="워드프레스에 발행">
@@ -413,14 +416,24 @@ function renderGenerate(container) {
           <input type="text" name="title" placeholder="비워두면 AI가 자동으로 생성합니다" class="w-full border rounded px-3 py-2">
         </div>
 
-        <div class="flex items-center">
-          <input type="checkbox" name="generate_image" id="generate_image" class="mr-2">
-          <label for="generate_image" class="text-sm">DALL-E로 썸네일 이미지 생성</label>
-        </div>
-
-        <div id="image-prompt-container" class="hidden">
-          <label class="block text-sm font-medium mb-2">이미지 프롬프트</label>
-          <input type="text" name="image_prompt" placeholder="예: Professional business illustration" class="w-full border rounded px-3 py-2">
+        <!-- 이미지 생성 섹션 -->
+        <div class="border-2 border-blue-200 rounded-lg p-4 bg-blue-50">
+          <div class="flex items-center mb-3">
+            <input type="checkbox" name="generate_image" id="generate_image" class="mr-3 w-5 h-5 text-blue-600">
+            <label for="generate_image" class="text-base font-semibold text-blue-900">
+              <i class="fas fa-image mr-2"></i>DALL-E 3로 썸네일 이미지 생성
+            </label>
+          </div>
+          
+          <div id="image-prompt-container" class="hidden">
+            <label class="block text-sm font-medium mb-2 text-blue-900">
+              <i class="fas fa-palette mr-1"></i>이미지 생성 프롬프트 (영문 권장)
+            </label>
+            <input type="text" name="image_prompt" placeholder="예: Professional modern office workspace with laptop and coffee" class="w-full border-2 border-blue-300 rounded px-3 py-2 focus:border-blue-500 focus:outline-none">
+            <p class="text-xs text-blue-700 mt-1">
+              ■ 구체적으로 작성할수록 좋은 이미지가 생성됩니다
+            </p>
+          </div>
         </div>
 
         <div class="flex justify-end space-x-2">
@@ -539,7 +552,10 @@ function previewContent(id) {
           </div>
           <div class="flex space-x-2">
             <button onclick="downloadContentTxt(${content.id})" class="px-4 py-2 bg-purple-500 text-white rounded hover:bg-purple-600">
-              TXT 다운로드
+              <i class="fas fa-file-alt mr-2"></i>TXT
+            </button>
+            <button onclick="downloadContentPdf(${content.id})" class="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600">
+              <i class="fas fa-file-pdf mr-2"></i>PDF
             </button>
             ${content.status === 'draft' ? `
               <button onclick="publishContent(${content.id}); hidePreviewModal();" class="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600">
@@ -579,6 +595,88 @@ function downloadContentTxt(id) {
   URL.revokeObjectURL(url);
   
   showNotification('TXT 파일이 다운로드되었습니다', 'success');
+}
+
+function downloadContentPdf(id) {
+  const content = state.contents.find(c => c.id === id);
+  if (!content) return;
+
+  try {
+    // jsPDF 사용
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4'
+    });
+
+    // 한글 폰트 설정이 없으므로 기본 폰트 사용
+    // 실제로는 Nanum Gothic 등을 base64로 embed해야 함
+    doc.setFont('helvetica');
+    doc.setFontSize(16);
+    
+    // 제목
+    const title = content.title;
+    doc.text(title, 20, 20, { maxWidth: 170 });
+    
+    // 구분선
+    doc.setLineWidth(0.5);
+    doc.line(20, 30, 190, 30);
+    
+    // 본문 (HTML 태그 제거)
+    doc.setFontSize(11);
+    const plainText = content.content
+      .replace(/<h[1-6][^>]*>/gi, '\n\n')
+      .replace(/<\/h[1-6]>/gi, '\n')
+      .replace(/<p[^>]*>/gi, '')
+      .replace(/<\/p>/gi, '\n')
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<li[^>]*>/gi, '• ')
+      .replace(/<\/li>/gi, '\n')
+      .replace(/<[^>]*>/g, '')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&amp;/g, '&')
+      .replace(/&quot;/g, '"')
+      .replace(/&#x27;/g, "'")
+      .replace(/\n\n+/g, '\n\n')
+      .trim();
+    
+    // 텍스트 분할 (A4 페이지에 맞게)
+    const lines = doc.splitTextToSize(plainText, 170);
+    let y = 40;
+    const lineHeight = 7;
+    const pageHeight = 280;
+    
+    for (let i = 0; i < lines.length; i++) {
+      if (y > pageHeight) {
+        doc.addPage();
+        y = 20;
+      }
+      doc.text(lines[i], 20, y);
+      y += lineHeight;
+    }
+    
+    // 푸터
+    if (y > pageHeight - 20) {
+      doc.addPage();
+      y = 20;
+    }
+    doc.setFontSize(9);
+    doc.setTextColor(128, 128, 128);
+    doc.text(`생성일시: ${new Date(content.created_at).toLocaleString('ko-KR')}`, 20, y + 10);
+    doc.text(`상태: ${getStatusText(content.status)}`, 20, y + 15);
+    
+    // PDF 저장
+    const filename = `${content.title.replace(/[^a-zA-Z0-9가-힣]/g, '_')}.pdf`;
+    doc.save(filename);
+    
+    showNotification('PDF 파일이 다운로드되었습니다', 'success');
+  } catch (error) {
+    console.error('PDF 생성 오류:', error);
+    showNotification('PDF 생성에 실패했습니다. 브라우저를 새로고침 후 다시 시도해주세요.', 'error');
+  }
 }
 
 async function deleteContent(id) {

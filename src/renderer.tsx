@@ -14,6 +14,7 @@ export const renderer = jsxRenderer(({ children }) => {
       <body class="bg-gray-100">
         {children}
         <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
         <script src="/static/app.js"></script>
       </body>
     </html>

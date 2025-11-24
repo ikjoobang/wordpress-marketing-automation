@@ -36,7 +36,12 @@ export class WordPressClient {
   constructor(config: WordPressConfig) {
     this.config = config;
     // Basic Authentication with Application Password
-    this.authHeader = 'Basic ' + btoa(`${config.username}:${config.password}`);
+    // UTF-8 안전한 Base64 인코딩
+    const credentials = `${config.username}:${config.password}`;
+    const encoder = new TextEncoder();
+    const data = encoder.encode(credentials);
+    const base64 = btoa(String.fromCharCode(...data));
+    this.authHeader = 'Basic ' + base64;
   }
 
   /**

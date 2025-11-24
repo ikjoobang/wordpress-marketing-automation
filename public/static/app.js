@@ -859,8 +859,128 @@ Create content optimized for AI search engines and voice search.
   alert(helpText);
 }
 
-function viewClientStats(id) {
-  showNotification('통계 기능은 곧 제공됩니다', 'info');
+async function viewClientStats(id) {
+  try {
+    const response = await axios.get(`${API_BASE}/clients/${id}/stats`);
+    const stats = response.data.data;
+    const client = state.clients.find(c => c.id === id);
+    
+    if (!client) return;
+
+    const modalHtml = `
+      <div id="stats-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+          <div class="p-6 border-b flex justify-between items-center">
+            <h3 class="text-xl font-bold">
+              <i class="fas fa-chart-bar mr-2 text-blue-500"></i>
+              ${client.name} - 통계
+            </h3>
+            <button onclick="hideStatsModal()" class="text-gray-500 hover:text-gray-700">
+              <i class="fas fa-times text-2xl"></i>
+            </button>
+          </div>
+          
+          <div class="p-6">
+            <!-- 전체 통계 카드 -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+              <div class="bg-blue-50 border-2 border-blue-200 rounded-lg p-4">
+                <div class="flex items-center justify-between">
+                  <div>
+                    <p class="text-blue-600 text-sm font-medium">전체 콘텐츠</p>
+                    <p class="text-3xl font-bold text-blue-900">${stats.total_contents}</p>
+                  </div>
+                  <i class="fas fa-file-alt text-4xl text-blue-400"></i>
+                </div>
+              </div>
+              
+              <div class="bg-green-50 border-2 border-green-200 rounded-lg p-4">
+                <div class="flex items-center justify-between">
+                  <div>
+                    <p class="text-green-600 text-sm font-medium">발행 완료</p>
+                    <p class="text-3xl font-bold text-green-900">${stats.published_contents}</p>
+                  </div>
+                  <i class="fas fa-check-circle text-4xl text-green-400"></i>
+                </div>
+              </div>
+              
+              <div class="bg-yellow-50 border-2 border-yellow-200 rounded-lg p-4">
+                <div class="flex items-center justify-between">
+                  <div>
+                    <p class="text-yellow-600 text-sm font-medium">임시저장</p>
+                    <p class="text-3xl font-bold text-yellow-900">${stats.draft_contents}</p>
+                  </div>
+                  <i class="fas fa-edit text-4xl text-yellow-400"></i>
+                </div>
+              </div>
+            </div>
+
+            <!-- 최근 활동 -->
+            <div class="mb-6">
+              <h4 class="text-lg font-semibold mb-3">
+                <i class="fas fa-history mr-2"></i>최근 활동
+              </h4>
+              <div class="bg-gray-50 rounded-lg p-4">
+                ${stats.recent_activities && stats.recent_activities.length > 0 ? 
+                  stats.recent_activities.map(activity => `
+                    <div class="flex items-center justify-between py-2 border-b last:border-b-0">
+                      <div class="flex items-center">
+                        <i class="fas fa-${activity.action === 'content_generated' ? 'magic' : 'paper-plane'} mr-3 text-gray-500"></i>
+                        <div>
+                          <p class="font-medium">${activity.details}</p>
+                          <p class="text-xs text-gray-500">${new Date(activity.created_at).toLocaleString('ko-KR')}</p>
+                        </div>
+                      </div>
+                      <span class="px-2 py-1 rounded text-xs ${activity.status === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">
+                        ${activity.status === 'success' ? '성공' : '실패'}
+                      </span>
+                    </div>
+                  `).join('')
+                : '<p class="text-gray-500 text-center py-4">최근 활동이 없습니다</p>'}
+              </div>
+            </div>
+
+            <!-- 콘텐츠 목록 -->
+            <div>
+              <h4 class="text-lg font-semibold mb-3">
+                <i class="fas fa-list mr-2"></i>최근 콘텐츠
+              </h4>
+              <div class="space-y-2">
+                ${stats.recent_contents && stats.recent_contents.length > 0 ?
+                  stats.recent_contents.map(content => `
+                    <div class="flex items-center justify-between p-3 bg-gray-50 rounded hover:bg-gray-100">
+                      <div class="flex-1">
+                        <p class="font-medium">${content.title}</p>
+                        <p class="text-xs text-gray-500">${new Date(content.created_at).toLocaleString('ko-KR')}</p>
+                      </div>
+                      <span class="px-2 py-1 rounded text-xs ${getStatusColor(content.status)}">
+                        ${getStatusText(content.status)}
+                      </span>
+                    </div>
+                  `).join('')
+                : '<p class="text-gray-500 text-center py-4">작성된 콘텐츠가 없습니다</p>'}
+              </div>
+            </div>
+          </div>
+
+          <div class="p-6 border-t bg-gray-50">
+            <button onclick="hideStatsModal()" class="px-6 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">
+              <i class="fas fa-times mr-2"></i>닫기
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+  } catch (error) {
+    console.error('통계 로드 실패:', error);
+    showNotification('통계를 불러오는데 실패했습니다', 'error');
+  }
+}
+
+function hideStatsModal() {
+  const modal = document.getElementById('stats-modal');
+  if (modal) modal.remove();
 }
 
 async function deleteClient(id) {

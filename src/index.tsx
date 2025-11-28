@@ -5,6 +5,7 @@ import { renderer } from './renderer'
 import clientsApi from './api/clients'
 import contentsApi from './api/contents'
 import customizerApi from './api/wordpress-customizer'
+import trendsApi from './api/trends'
 import { rateLimit, securityHeaders, csrfProtection } from './middleware/security'
 
 type Bindings = {
@@ -40,6 +41,7 @@ app.use('/static/*', serveStatic({ root: './public' }))
 app.route('/api/clients', clientsApi)
 app.route('/api/contents', contentsApi)
 app.route('/api/customizer', customizerApi)
+app.route('/api/trends', trendsApi)
 
 // 렌더러
 app.use(renderer)

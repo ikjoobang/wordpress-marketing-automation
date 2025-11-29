@@ -17,11 +17,18 @@ const app = new Hono<{ Bindings: Bindings }>();
 const NAVER_CLIENT_ID = 'fUhHJ1HWyF6fFw_aBfkg';
 const NAVER_CLIENT_SECRET = 'gA4jUFDYK0';
 
-// Gemini API Key (작동하는 키만 사용)
-const GEMINI_API_KEY = 'AIzaSyBPMH_-SA7bConhlG1TTeiBNj8TnyQQ4Jc';
+// Gemini API Keys (로테이션)
+const GEMINI_API_KEYS = [
+  'AIzaSyDdoQjn_WcAi6_8FkS_ujr976okHXypT3s',  // 새 키 (우선)
+  'AIzaSyBPMH_-SA7bConhlG1TTeiBNj8TnyQQ4Jc',  // 백업 키
+];
+
+let currentKeyIndex = 0;
 
 function getNextGeminiKey(): string {
-  return GEMINI_API_KEY;
+  const key = GEMINI_API_KEYS[currentKeyIndex];
+  currentKeyIndex = (currentKeyIndex + 1) % GEMINI_API_KEYS.length;
+  return key;
 }
 
 /**

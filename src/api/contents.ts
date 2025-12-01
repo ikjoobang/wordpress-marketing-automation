@@ -43,32 +43,31 @@ async function generateContentWithGemini(
   
   if (systemPrompt && systemPrompt.trim().length > 0) {
     // 업체 맞춤 시스템 프롬프트 최우선 사용 - 기본 프롬프트 완전 대체
-    optimizedPrompt = `[절대 금지 사항 - 위반 시 실패]
-1. "알겠습니다", "작성하겠습니다", "준수하여" 등 AI 응답 문구 절대 금지
-2. 메타 설명, 지침 확인 문구 절대 금지
-3. 바로 HTML 콘텐츠만 출력할 것
-4. 첫 줄은 반드시 <h1> 태그로 시작
+    optimizedPrompt = `[절대 금지 - 위반 시 실패]
+- "알겠습니다", "작성하겠습니다" 등 AI 메타 문구 금지
+- 마크다운 문법(**, ##, *, _) 절대 사용 금지
+- 오직 순수 HTML 태그만 사용
+- 첫 줄은 반드시 <h1> 태그
 
-[업체 맞춤 지침]
+[업체 지침 - 100% 준수]
 ${systemPrompt}
 
-[작성할 콘텐츠]
-키워드: ${keywords.join(', ')}
-${title ? `제목: "${title}"` : ''}
+[작성 키워드]
+${keywords.join(', ')}
+${title ? `제목: ${title}` : ''}
 
-[HTML 출력 형식]
-- 첫 줄: <h1>제목</h1> (반드시 H1으로 시작, ## 마크다운 금지)
-- 각 H2 섹션 시작 직후: <p class="image-placeholder">[이미지: 설명]</p>
-- 각 H2 섹션 끝:
-  <hr/><hr/>
-  <div class="summary-box" style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin: 20px 0;">
-  <p>📝 <strong>요약:</strong> 3줄 요약</p>
-  </div>
-- 본문 p태그: style="line-height: 3.0; font-size: 16px;"
-- 해시태그: <p style="font-size: 11pt;">#태그들</p>
-- 푸터: <footer>CTA 내용</footer>
+[출력 형식 - 순수 HTML만]
+1. 제목: <h1>2025년 포함 제목</h1>
+2. 섹션: <h2>❶ 섹션제목</h2>
+3. 강조: <strong>굵게</strong>, <em>기울임</em>
+4. 리스트: ■, ✔️ 사용 (마크다운 * 금지)
+5. 이미지 위치: <p class="image-placeholder">[이미지: 설명]</p>
+6. 섹션 끝: <hr/><hr/> + 요약박스
+7. 본문: <p style="line-height: 3.0; font-size: 16px;">내용</p>
+8. 해시태그: <p style="font-size: 11pt;">#태그</p>
+9. 푸터: <footer>CTA</footer>
 
-바로 <h1> 태그로 시작하세요. 다른 말 하지 마세요.`;
+지금 바로 <h1> 태그로 시작. 다른 말 금지.`;
   } else {
     // 기본 프롬프트 (시스템 프롬프트 없는 경우)
     optimizedPrompt = `키워드: ${keywords.join(', ')}
@@ -576,6 +575,86 @@ app.get('/scheduled/list', async (c) => {
     return c.json({ 
       success: false, 
       error: error instanceof Error ? error.message : '조회 실패' 
+    }, 500);
+  }
+});
+
+/**
+ * 예약 발행 자동 처리 (외부 트리거용 API)
+ * - Cloudflare Pages는 Cron을 지원하지 않으므로 외부에서 호출
+ * - 예: cron-job.org, GitHub Actions, 또는 수동 호출
+ */
+app.post('/scheduled/process', async (c) => {
+  try {
+    const now = new Date().toISOString();
+    
+    // 예약 시간이 지난 콘텐츠 조회
+    const scheduled = await c.env.DB.prepare(`
+      SELECT c.*, cl.wordpress_url, cl.wordpress_username, cl.wordpress_password, cl.name as client_name
+      FROM contents c
+      JOIN clients cl ON c.client_id = cl.id
+      WHERE c.status = 'scheduled' AND c.scheduled_at <= ?
+      ORDER BY c.scheduled_at ASC
+      LIMIT 10
+    `).bind(now).all();
+
+    if (!scheduled.results || scheduled.results.length === 0) {
+      return c.json({ 
+        success: true, 
+        message: '처리할 예약 콘텐츠가 없습니다',
+        processed: 0
+      });
+    }
+
+    let processed = 0;
+    const results: any[] = [];
+
+    for (const content of scheduled.results as any[]) {
+      try {
+        // 시뮬레이션 모드로 발행 (워드프레스 연동 시 실제 발행으로 변경)
+        await c.env.DB.prepare(`
+          UPDATE contents 
+          SET status = 'published', wordpress_post_id = 999999, published_at = CURRENT_TIMESTAMP, scheduled_at = NULL
+          WHERE id = ?
+        `).bind(content.id).run();
+
+        await c.env.DB.prepare(`
+          INSERT INTO activity_logs (client_id, action, details, status)
+          VALUES (?, ?, ?, ?)
+        `).bind(
+          content.client_id,
+          'auto_published',
+          `[자동발행] ${content.title}`,
+          'success'
+        ).run();
+
+        processed++;
+        results.push({ id: content.id, title: content.title, status: 'published' });
+      } catch (error) {
+        await c.env.DB.prepare(`
+          INSERT INTO activity_logs (client_id, action, details, status)
+          VALUES (?, ?, ?, ?)
+        `).bind(
+          content.client_id,
+          'auto_publish_failed',
+          `[자동발행 실패] ${content.title}: ${error}`,
+          'failed'
+        ).run();
+        
+        results.push({ id: content.id, title: content.title, status: 'failed', error: String(error) });
+      }
+    }
+
+    return c.json({ 
+      success: true, 
+      message: `${processed}개 콘텐츠 자동 발행 완료`,
+      processed,
+      results
+    });
+  } catch (error) {
+    return c.json({ 
+      success: false, 
+      error: error instanceof Error ? error.message : '자동 발행 처리 실패' 
     }, 500);
   }
 });

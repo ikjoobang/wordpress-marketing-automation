@@ -1,0 +1,21 @@
+name: 예약 발행 자동 처리
+
+on:
+  schedule:
+    # 매 5분마다 실행
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+    # 수동 실행 가능
+
+jobs:
+  process-scheduled:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 예약 발행 처리 API 호출
+        run: |
+          response=$(curl -s -X POST "https://webapp-2t1.pages.dev/api/contents/scheduled/process")
+          echo "Response: $response"
+          
+          # 결과 확인
+          processed=$(echo $response | jq -r '.processed // 0')
+          echo "처리된 콘텐츠: $processed개"

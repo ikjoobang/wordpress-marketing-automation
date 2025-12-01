@@ -443,6 +443,147 @@ app.post('/generate', async (c) => {
 });
 
 /**
+ * 예약 발행 설정
+ */
+app.post('/:id/schedule', async (c) => {
+  try {
+    const id = c.req.param('id');
+    const body = await c.req.json<{
+      scheduled_at: string;  // ISO 8601 형식: 2025-12-01T15:00:00
+    }>();
+
+    if (!body.scheduled_at) {
+      return c.json({ success: false, error: '예약 시간이 필요합니다' }, 400);
+    }
+
+    // 콘텐츠 존재 확인
+    const content = await c.env.DB.prepare(
+      'SELECT * FROM contents WHERE id = ?'
+    ).bind(id).first() as Content | null;
+
+    if (!content) {
+      return c.json({ success: false, error: '콘텐츠를 찾을 수 없습니다' }, 404);
+    }
+
+    // 예약 시간 검증 (과거 시간 불가)
+    const scheduledTime = new Date(body.scheduled_at);
+    const now = new Date();
+    if (scheduledTime <= now) {
+      return c.json({ success: false, error: '예약 시간은 현재 시간 이후여야 합니다' }, 400);
+    }
+
+    // 예약 발행 설정
+    await c.env.DB.prepare(`
+      UPDATE contents 
+      SET status = 'scheduled', scheduled_at = ?
+      WHERE id = ?
+    `).bind(body.scheduled_at, id).run();
+
+    // 활동 로그 기록
+    await c.env.DB.prepare(`
+      INSERT INTO activity_logs (client_id, action, details, status)
+      VALUES (?, ?, ?, ?)
+    `).bind(
+      content.client_id,
+      'content_scheduled',
+      `예약 발행 설정: ${content.title} → ${body.scheduled_at}`,
+      'success'
+    ).run();
+
+    return c.json({ 
+      success: true, 
+      data: {
+        id: parseInt(id),
+        scheduled_at: body.scheduled_at,
+        status: 'scheduled'
+      },
+      message: `예약 발행이 설정되었습니다: ${new Date(body.scheduled_at).toLocaleString('ko-KR')}`
+    });
+  } catch (error) {
+    return c.json({ 
+      success: false, 
+      error: error instanceof Error ? error.message : '예약 설정 실패' 
+    }, 500);
+  }
+});
+
+/**
+ * 예약 발행 취소
+ */
+app.delete('/:id/schedule', async (c) => {
+  try {
+    const id = c.req.param('id');
+
+    // 콘텐츠 조회
+    const content = await c.env.DB.prepare(
+      'SELECT * FROM contents WHERE id = ?'
+    ).bind(id).first() as Content | null;
+
+    if (!content) {
+      return c.json({ success: false, error: '콘텐츠를 찾을 수 없습니다' }, 404);
+    }
+
+    if (content.status !== 'scheduled') {
+      return c.json({ success: false, error: '예약된 콘텐츠가 아닙니다' }, 400);
+    }
+
+    // 예약 취소 (draft로 변경)
+    await c.env.DB.prepare(`
+      UPDATE contents 
+      SET status = 'draft', scheduled_at = NULL
+      WHERE id = ?
+    `).bind(id).run();
+
+    // 활동 로그 기록
+    await c.env.DB.prepare(`
+      INSERT INTO activity_logs (client_id, action, details, status)
+      VALUES (?, ?, ?, ?)
+    `).bind(
+      content.client_id,
+      'schedule_cancelled',
+      `예약 발행 취소: ${content.title}`,
+      'success'
+    ).run();
+
+    return c.json({ 
+      success: true, 
+      message: '예약이 취소되었습니다'
+    });
+  } catch (error) {
+    return c.json({ 
+      success: false, 
+      error: error instanceof Error ? error.message : '예약 취소 실패' 
+    }, 500);
+  }
+});
+
+/**
+ * 예약된 콘텐츠 목록 조회
+ */
+app.get('/scheduled/list', async (c) => {
+  try {
+    const result = await c.env.DB.prepare(`
+      SELECT c.*, cl.name as client_name
+      FROM contents c
+      LEFT JOIN clients cl ON c.client_id = cl.id
+      WHERE c.status = 'scheduled'
+      ORDER BY c.scheduled_at ASC
+    `).all();
+
+    return c.json({ 
+      success: true, 
+      data: result.results,
+      count: result.results.length
+    });
+  } catch (error) {
+    return c.json({ 
+      success: false, 
+      error: error instanceof Error ? error.message : '조회 실패' 
+    }, 500);
+  }
+});
+
+/**
  * 워드프레스에 발행
  */
 app.post('/:id/publish', async (c) => {

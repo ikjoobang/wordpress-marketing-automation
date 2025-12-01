@@ -943,9 +943,20 @@ function previewContent(id) {
               <i class="fas fa-file-pdf mr-2"></i>PDF
             </button>
             ${content.status === 'draft' ? `
-              <button onclick="publishContent(${content.id}); hidePreviewModal();" class="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600">
-                워드프레스 발행
+              <button onclick="showScheduleModal(${content.id})" class="px-4 py-2 bg-orange-500 text-white rounded hover:bg-orange-600">
+                <i class="fas fa-clock mr-2"></i>예약 발행
               </button>
+              <button onclick="publishContent(${content.id}); hidePreviewModal();" class="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600">
+                <i class="fas fa-paper-plane mr-2"></i>즉시 발행
+              </button>
+            ` : ''}
+            ${content.status === 'scheduled' ? `
+              <button onclick="cancelSchedule(${content.id})" class="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600">
+                <i class="fas fa-times mr-2"></i>예약 취소
+              </button>
+              <span class="px-4 py-2 text-orange-600 font-semibold">
+                <i class="fas fa-clock mr-2"></i>${content.scheduled_at ? new Date(content.scheduled_at).toLocaleString('ko-KR') : ''} 예약됨
+              </span>
             ` : ''}
           </div>
         </div>
@@ -959,6 +970,106 @@ function previewContent(id) {
 function hidePreviewModal() {
   const modal = document.getElementById('preview-modal');
   if (modal) modal.remove();
+}
+
+// 예약 발행 모달 표시
+function showScheduleModal(contentId) {
+  const content = state.contents.find(c => c.id === contentId);
+  if (!content) return;
+
+  // 기본값: 현재 시간 + 1시간
+  const defaultTime = new Date();
+  defaultTime.setHours(defaultTime.getHours() + 1);
+  const defaultTimeStr = defaultTime.toISOString().slice(0, 16);
+
+  const modalHtml = `
+    <div id="schedule-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div class="bg-white rounded-lg w-full max-w-md p-6">
+        <div class="flex justify-between items-center mb-4">
+          <h3 class="text-xl font-bold">
+            <i class="fas fa-clock text-orange-500 mr-2"></i>예약 발행 설정
+          </h3>
+          <button onclick="hideScheduleModal()" class="text-gray-500 hover:text-gray-700">
+            <i class="fas fa-times text-xl"></i>
+          </button>
+        </div>
+        
+        <div class="mb-4">
+          <p class="text-gray-600 mb-2">콘텐츠: <strong>${content.title}</strong></p>
+        </div>
+        
+        <div class="mb-6">
+          <label class="block text-sm font-medium text-gray-700 mb-2">예약 발행 시간</label>
+          <input type="datetime-local" id="schedule-datetime" 
+            class="w-full p-3 border rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+            value="${defaultTimeStr}" min="${new Date().toISOString().slice(0, 16)}">
+        </div>
+        
+        <div class="flex space-x-3">
+          <button onclick="hideScheduleModal()" class="flex-1 px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400">
+            취소
+          </button>
+          <button onclick="scheduleContent(${contentId})" class="flex-1 px-4 py-2 bg-orange-500 text-white rounded hover:bg-orange-600">
+            <i class="fas fa-check mr-2"></i>예약 설정
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.body.insertAdjacentHTML('beforeend', modalHtml);
+}
+
+function hideScheduleModal() {
+  const modal = document.getElementById('schedule-modal');
+  if (modal) modal.remove();
+}
+
+// 예약 발행 설정
+async function scheduleContent(contentId) {
+  const datetimeInput = document.getElementById('schedule-datetime');
+  const scheduledAt = datetimeInput.value;
+
+  if (!scheduledAt) {
+    showNotification('예약 시간을 선택해주세요', 'error');
+    return;
+  }
+
+  try {
+    const response = await axios.post(`${API_BASE}/contents/${contentId}/schedule`, {
+      scheduled_at: scheduledAt
+    });
+
+    if (response.data.success) {
+      showNotification(response.data.message, 'success');
+      hideScheduleModal();
+      hidePreviewModal();
+      loadContents();
+    } else {
+      showNotification(response.data.error || '예약 설정에 실패했습니다', 'error');
+    }
+  } catch (error) {
+    showNotification(error.response?.data?.error || '예약 설정에 실패했습니다', 'error');
+  }
+}
+
+// 예약 취소
+async function cancelSchedule(contentId) {
+  if (!confirm('예약을 취소하시겠습니까?')) return;
+
+  try {
+    const response = await axios.delete(`${API_BASE}/contents/${contentId}/schedule`);
+
+    if (response.data.success) {
+      showNotification('예약이 취소되었습니다', 'success');
+      hidePreviewModal();
+      loadContents();
+    } else {
+      showNotification(response.data.error || '예약 취소에 실패했습니다', 'error');
+    }
+  } catch (error) {
+    showNotification(error.response?.data?.error || '예약 취소에 실패했습니다', 'error');
+  }
 }
 
 function downloadContentTxt(id) {

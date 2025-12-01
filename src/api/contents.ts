@@ -167,6 +167,7 @@ ${title ? `제목: "${title}"` : ''}
  * Gemini 2.0 Flash Image Generation을 사용한 이미지 생성
  * - 한국인/한국 배경 자연스러운 아이폰 촬영 스타일
  * - AI 느낌 없이 실제 사진처럼 생성
+ * - 텍스트/글자 절대 포함 금지
  */
 async function generateImageWithGemini(userPrompt: string, keywords: string[]): Promise<string> {
   const enhancedPrompt = `Generate a photorealistic image:
@@ -182,8 +183,15 @@ CRITICAL STYLE REQUIREMENTS for authentic Korean photo:
 - Contemporary Korean fashion (modern casual or business casual)
 - Authentic unstaged moment, slightly off-center composition
 - Real-life depth of field, slight background blur
-- NO: AI-generated look, plastic skin, western features, stock photo feel
-- Context keywords: ${keywords.join(', ')}`;
+
+ABSOLUTE RESTRICTIONS - MUST FOLLOW:
+- NO TEXT of any kind (Korean, English, numbers, logos, watermarks)
+- NO letters, words, characters, typography, captions, labels
+- NO signs, banners, posters with text
+- NO brand names, company logos, UI elements
+- PURE photography only - zero text elements anywhere in the image
+
+- NO: AI-generated look, plastic skin, western features, stock photo feel`;
 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_IMAGE_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
   

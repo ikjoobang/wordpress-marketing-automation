@@ -438,6 +438,7 @@ async function loadContents() {
               <span class="px-2 py-1 rounded text-xs ${getStatusColor(content.status)}">
                 ${getStatusText(content.status)}
               </span>
+              ${content.image_url ? '<span class="px-2 py-1 rounded text-xs bg-pink-100 text-pink-800"><i class="fas fa-image mr-1"></i>이미지</span>' : ''}
               <span class="text-xs text-gray-500">${new Date(content.created_at).toLocaleString('ko-KR')}</span>
             </div>
           </div>
@@ -904,6 +905,16 @@ function previewContent(id) {
   const content = state.contents.find(c => c.id === id);
   if (!content) return;
 
+  // 이미지 HTML 생성 (image_url이 있으면 표시)
+  const imageHtml = content.image_url ? `
+    <div class="mb-6 border-2 border-pink-200 rounded-lg p-4 bg-pink-50">
+      <h4 class="text-sm font-semibold text-pink-700 mb-3">
+        <i class="fas fa-image mr-2"></i>생성된 썸네일 이미지
+      </h4>
+      <img src="${content.image_url}" alt="${content.title}" class="w-full max-w-md mx-auto rounded-lg shadow-lg" style="max-height: 400px; object-fit: contain;">
+    </div>
+  ` : '';
+
   const modalHtml = `
     <div id="preview-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div class="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] flex flex-col">
@@ -914,6 +925,7 @@ function previewContent(id) {
           </button>
         </div>
         <div class="p-6 overflow-y-auto flex-1">
+          ${imageHtml}
           <div class="prose max-w-none">
             ${content.content}
           </div>

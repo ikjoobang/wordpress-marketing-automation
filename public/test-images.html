@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gemini 2.0 Flash 이미지 생성 테스트</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .image-card img { 
+            max-height: 400px; 
+            object-fit: contain;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 p-8">
+    <div class="max-w-6xl mx-auto">
+        <h1 class="text-3xl font-bold text-center mb-2">🖼️ Gemini 2.0 Flash 이미지 생성 테스트</h1>
+        <p class="text-center text-gray-600 mb-8">한국인/한국배경 자연스러운 아이폰 촬영 스타일</p>
+        
+        <div id="loading" class="text-center py-12">
+            <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p>이미지 로딩 중...</p>
+        </div>
+        
+        <div id="images" class="grid grid-cols-1 md:grid-cols-2 gap-6 hidden">
+        </div>
+    </div>
+    
+    <script>
+        async function loadImages() {
+            try {
+                const response = await fetch('/api/contents?limit=10');
+                const data = await response.json();
+                
+                const imagesDiv = document.getElementById('images');
+                const loadingDiv = document.getElementById('loading');
+                
+                // 이미지가 있는 콘텐츠만 필터링
+                const contentsWithImages = data.data.filter(c => c.image_url);
+                
+                if (contentsWithImages.length === 0) {
+                    loadingDiv.innerHTML = '<p class="text-gray-500">이미지가 있는 콘텐츠가 없습니다.</p>';
+                    return;
+                }
+                
+                contentsWithImages.slice(0, 6).forEach(content => {
+                    const card = document.createElement('div');
+                    card.className = 'image-card bg-white rounded-xl shadow-lg overflow-hidden';
+                    card.innerHTML = `
+                        <img src="${content.image_url}" alt="${content.title}" class="w-full">
+                        <div class="p-4">
+                            <h3 class="font-bold text-lg">${content.title}</h3>
+                            <p class="text-sm text-gray-500">ID: ${content.id} | 생성일: ${new Date(content.created_at).toLocaleString('ko-KR')}</p>
+                            <p class="text-xs text-gray-400 mt-2">키워드: ${content.keywords || 'N/A'}</p>
+                        </div>
+                    `;
+                    imagesDiv.appendChild(card);
+                });
+                
+                loadingDiv.classList.add('hidden');
+                imagesDiv.classList.remove('hidden');
+                
+            } catch (error) {
+                document.getElementById('loading').innerHTML = `<p class="text-red-500">에러: ${error.message}</p>`;
+            }
+        }
+        
+        loadImages();
+    </script>
+</body>
+</html>

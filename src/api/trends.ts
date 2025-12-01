@@ -19,7 +19,7 @@ const NAVER_CLIENT_ID = 'fUhHJ1HWyF6fFw_aBfkg';
 const NAVER_CLIENT_SECRET = 'gA4jUFDYK0';
 
 // Gemini API Key - 1.5 Pro 모델 사용 (새 키 2025-12-01)
-const GEMINI_API_KEY = 'AIzaSyApZL4NCnoZZkpS5t7LC7PNSKNeFngBFO0';
+const GEMINI_API_KEY = 'AIzaSyB8DQPgSRhOVhmZgn_LyQfyQSwnF0oGuUo';
 
 // Gemini 모델 설정 - gemini-2.0-flash (빠르고 안정적)
 const GEMINI_MODEL = 'gemini-2.0-flash';

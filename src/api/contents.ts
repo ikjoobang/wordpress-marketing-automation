@@ -21,7 +21,7 @@ type Bindings = {
 const app = new Hono<{ Bindings: Bindings }>();
 
 // ★ Gemini 2.0 Flash 올인원 설정 ★
-const GEMINI_API_KEY = 'AIzaSyApZL4NCnoZZkpS5t7LC7PNSKNeFngBFO0';
+const GEMINI_API_KEY = 'AIzaSyB8DQPgSRhOVhmZgn_LyQfyQSwnF0oGuUo';
 const GEMINI_TEXT_MODEL = 'gemini-2.0-flash';
 const GEMINI_IMAGE_MODEL = 'gemini-2.0-flash-exp-image-generation';
 

@@ -128,14 +128,29 @@ ${title ? `제목: "${title}"` : ''}
   }
 
   const data = await response.json();
-  const generatedText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  let generatedText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
   
   if (!generatedText) {
     throw new Error('Gemini API returned empty content');
   }
 
+  // 마크다운 코드 블록 제거 (```html ... ``` 또는 ``` ... ```)
+  generatedText = generatedText
+    .replace(/^```html\s*\n?/i, '')  // 시작 ```html 제거
+    .replace(/^```\s*\n?/m, '')      // 시작 ``` 제거
+    .replace(/\n?```\s*$/m, '')      // 끝 ``` 제거
+    .trim();
+
+  // 완전한 HTML 문서가 아닌 경우 body 내용만 추출
+  if (generatedText.includes('<!DOCTYPE html>')) {
+    const bodyMatch = generatedText.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+    if (bodyMatch) {
+      generatedText = bodyMatch[1].trim();
+    }
+  }
+
   // 제목과 본문 추출
-  const titleMatch = generatedText.match(/<h1>(.*?)<\/h1>/i) || generatedText.match(/^#\s+(.+)$/m);
+  const titleMatch = generatedText.match(/<h1[^>]*>(.*?)<\/h1>/i) || generatedText.match(/^#\s+(.+)$/m);
   const extractedTitle = title || (titleMatch ? titleMatch[1] : keywords[0]);
   
   // 요약 생성 (첫 150자)
@@ -152,10 +167,8 @@ ${title ? `제목: "${title}"` : ''}
  * Gemini 2.0 Flash Image Generation을 사용한 이미지 생성
  * - 한국인/한국 배경 자연스러운 아이폰 촬영 스타일
  * - AI 느낌 없이 실제 사진처럼 생성
- * - Imagen 4보다 비용 효율적
  */
 async function generateImageWithGemini(userPrompt: string, keywords: string[]): Promise<string> {
-  // 한국인/한국 배경 자연스러운 사진 스타일 프롬프트 최적화
   const enhancedPrompt = `Generate a photorealistic image:
 
 ${userPrompt}
@@ -194,8 +207,6 @@ CRITICAL STYLE REQUIREMENTS for authentic Korean photo:
   }
 
   const data = await response.json();
-  
-  // 이미지 데이터 추출 (Gemini 응답 구조)
   const parts = data.candidates?.[0]?.content?.parts || [];
   const imagePart = parts.find((p: any) => p.inlineData?.mimeType?.startsWith('image/'));
   
@@ -205,6 +216,82 @@ CRITICAL STYLE REQUIREMENTS for authentic Korean photo:
 
   const mimeType = imagePart.inlineData.mimeType || 'image/png';
   return `data:${mimeType};base64,${imagePart.inlineData.data}`;
+}
+
+/**
+ * 콘텐츠 본문의 이미지 placeholder를 실제 이미지로 교체
+ * DB 크기 제한 때문에 base64 대신 content_images 테이블에 별도 저장 후 URL로 참조
+ */
+async function replaceImagePlaceholders(
+  content: string, 
+  keywords: string[],
+  contentId: number,
+  db: D1Database,
+  maxImages: number = 5
+): Promise<{ content: string; images: string[]; thumbnailUrl: string | null }> {
+  // 이미지 placeholder 패턴 찾기
+  const placeholderPattern = /<p[^>]*class="image-placeholder"[^>]*>\[이미지:[^\]]+\]<\/p>|\[이미지:[^\]]+\]/gi;
+  const matches = content.match(placeholderPattern) || [];
+  
+  console.log(`발견된 이미지 placeholder: ${matches.length}개`);
+  
+  // 최대 이미지 수 제한
+  const imagesToGenerate = matches.slice(0, maxImages);
+  const generatedImages: string[] = [];
+  let thumbnailUrl: string | null = null;
+  
+  let updatedContent = content;
+  
+  for (let i = 0; i < imagesToGenerate.length; i++) {
+    const placeholder = imagesToGenerate[i];
+    
+    // placeholder에서 이미지 설명 추출
+    const descMatch = placeholder.match(/\[이미지:\s*([^\]]+)\]/i);
+    const imageDesc = descMatch ? descMatch[1].trim() : `${keywords[0]} 관련 이미지`;
+    
+    console.log(`이미지 ${i + 1}/${imagesToGenerate.length} 생성 중: ${imageDesc}`);
+    
+    try {
+      // 이미지 생성
+      const imagePrompt = `Korean professional photo: ${imageDesc}. 
+Style: Modern Seoul office or business setting, warm natural lighting, iPhone photo style.`;
+      
+      const base64Image = await generateImageWithGemini(imagePrompt, keywords);
+      
+      // content_images 테이블에 저장
+      const imgResult = await db.prepare(`
+        INSERT INTO content_images (content_id, image_data, alt_text, position)
+        VALUES (?, ?, ?, ?)
+      `).bind(contentId, base64Image, imageDesc, i).run();
+      
+      const imageId = imgResult.meta.last_row_id;
+      const imageApiUrl = `/api/contents/${contentId}/images/${imageId}`;
+      generatedImages.push(imageApiUrl);
+      
+      // 첫 번째 이미지를 썸네일로
+      if (i === 0) {
+        thumbnailUrl = imageApiUrl;
+      }
+      
+      // placeholder를 img 태그로 교체 (API URL 참조)
+      const imgTag = `<div class="content-image" style="margin: 20px 0; text-align: center;">
+  <img src="${imageApiUrl}" alt="${imageDesc}" style="max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);" loading="lazy">
+  <p style="font-size: 12px; color: #666; margin-top: 8px;">${imageDesc}</p>
+</div>`;
+      
+      updatedContent = updatedContent.replace(placeholder, imgTag);
+      console.log(`이미지 ${i + 1} 저장 완료 (ID: ${imageId})`);
+      
+    } catch (error) {
+      console.error(`이미지 ${i + 1} 생성 실패:`, error);
+      updatedContent = updatedContent.replace(placeholder, '');
+    }
+  }
+  
+  // 남은 placeholder 제거
+  updatedContent = updatedContent.replace(placeholderPattern, '');
+  
+  return { content: updatedContent, images: generatedImages, thumbnailUrl };
 }
 
 /**
@@ -272,14 +359,7 @@ app.post('/generate', async (c) => {
       client.system_prompt || undefined  // 업체별 맞춤 프롬프트 적용
     );
 
-    // Gemini 2.0 Flash로 이미지 생성 (옵션) - 한국인/한국배경 자연스러운 아이폰 스타일
-    let imageUrl: string | undefined;
-    if (body.generate_image) {
-      const imagePrompt = body.image_prompt || `Korean professional in modern Seoul setting related to: ${generated.title}`;
-      imageUrl = await generateImageWithGemini(imagePrompt, body.keywords);
-    }
-
-    // DB에 저장
+    // 1단계: 콘텐츠 먼저 저장 (이미지 없이)
     const result = await c.env.DB.prepare(`
       INSERT INTO contents (
         client_id, title, content, 
@@ -288,20 +368,63 @@ app.post('/generate', async (c) => {
     `).bind(
       body.client_id,
       generated.title,
-      generated.content,
+      generated.content,  // 원본 콘텐츠 (placeholder 포함)
       'draft',
-      imageUrl || null,
+      null,
       JSON.stringify(body.keywords)
     ).run();
+
+    const contentId = result.meta.last_row_id as number;
+    let finalContent = generated.content;
+    let thumbnailUrl: string | null = null;
+    let totalImages = 0;
+
+    // 2단계: 이미지 생성 옵션이 켜져 있으면 이미지 생성 및 본문 업데이트
+    if (body.generate_image) {
+      console.log('=== 섹션별 이미지 생성 시작 ===');
+      
+      try {
+        // 본문 내 이미지 placeholder를 실제 이미지로 교체 (최대 5개)
+        const imageResult = await replaceImagePlaceholders(
+          generated.content,
+          body.keywords,
+          contentId,
+          c.env.DB,
+          5  // 최대 5개 이미지 생성
+        );
+        
+        finalContent = imageResult.content;
+        thumbnailUrl = imageResult.thumbnailUrl;
+        totalImages = imageResult.images.length;
+        
+        // 3단계: 이미지가 삽입된 콘텐츠로 업데이트
+        await c.env.DB.prepare(`
+          UPDATE contents 
+          SET content = ?, image_url = ?
+          WHERE id = ?
+        `).bind(finalContent, thumbnailUrl, contentId).run();
+        
+        console.log(`=== 이미지 생성 완료: 총 ${totalImages}개 ===`);
+        
+      } catch (imageError) {
+        console.error('이미지 생성 중 오류:', imageError);
+        // 이미지 생성 실패해도 텍스트 콘텐츠는 유지
+      }
+    }
 
     return c.json({ 
       success: true, 
       data: {
-        id: result.meta.last_row_id,
-        ...generated,
-        imageUrl
+        id: contentId,
+        title: generated.title,
+        content: finalContent,
+        excerpt: generated.excerpt,
+        imageUrl: thumbnailUrl,
+        totalImages: totalImages
       },
-      message: '콘텐츠가 생성되었습니다'
+      message: totalImages > 0 
+        ? `콘텐츠가 생성되었습니다 (이미지 ${totalImages}개 포함)`
+        : '콘텐츠가 생성되었습니다'
     });
   } catch (error) {
     return c.json({ 
@@ -692,6 +815,86 @@ app.get('/export/all', async (c) => {
     return c.json({ 
       success: false, 
       error: error instanceof Error ? error.message : '전체 내보내기 실패' 
+    }, 500);
+  }
+});
+
+/**
+ * 콘텐츠 이미지 조회 API
+ * GET /api/contents/:contentId/images/:imageId
+ * 본문에 삽입된 이미지를 제공
+ */
+app.get('/:contentId/images/:imageId', async (c) => {
+  try {
+    const contentId = c.req.param('contentId');
+    const imageId = c.req.param('imageId');
+    
+    const image = await c.env.DB.prepare(`
+      SELECT image_data, alt_text FROM content_images 
+      WHERE id = ? AND content_id = ?
+    `).bind(imageId, contentId).first() as { image_data: string; alt_text: string } | null;
+    
+    if (!image) {
+      return c.json({ success: false, error: '이미지를 찾을 수 없습니다' }, 404);
+    }
+    
+    // base64 데이터에서 이미지 바이너리 추출
+    const base64Data = image.image_data;
+    const mimeMatch = base64Data.match(/^data:([^;]+);base64,/);
+    const mimeType = mimeMatch ? mimeMatch[1] : 'image/png';
+    const base64Content = base64Data.replace(/^data:[^;]+;base64,/, '');
+    
+    // base64를 바이너리로 변환
+    const binaryString = atob(base64Content);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    
+    return new Response(bytes, {
+      headers: {
+        'Content-Type': mimeType,
+        'Cache-Control': 'public, max-age=31536000',  // 1년 캐시
+        'Content-Disposition': `inline; filename="image_${imageId}.png"`,
+      },
+    });
+  } catch (error) {
+    console.error('이미지 조회 오류:', error);
+    return c.json({ 
+      success: false, 
+      error: error instanceof Error ? error.message : '이미지 조회 실패' 
+    }, 500);
+  }
+});
+
+/**
+ * 콘텐츠의 모든 이미지 목록 조회
+ * GET /api/contents/:contentId/images
+ */
+app.get('/:contentId/images', async (c) => {
+  try {
+    const contentId = c.req.param('contentId');
+    
+    const { results } = await c.env.DB.prepare(`
+      SELECT id, alt_text, position, created_at FROM content_images 
+      WHERE content_id = ?
+      ORDER BY position ASC
+    `).bind(contentId).all();
+    
+    return c.json({ 
+      success: true, 
+      data: results.map((img: any) => ({
+        id: img.id,
+        url: `/api/contents/${contentId}/images/${img.id}`,
+        alt_text: img.alt_text,
+        position: img.position,
+        created_at: img.created_at
+      }))
+    });
+  } catch (error) {
+    return c.json({ 
+      success: false, 
+      error: error instanceof Error ? error.message : '이미지 목록 조회 실패' 
     }, 500);
   }
 });

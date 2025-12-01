@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>이미지 테스트</title>
+</head>
+<body>
+  <h1>이미지 로딩 테스트</h1>
+  <div id="image-container">로딩 중...</div>
+  <script>
+    fetch('/api/contents?limit=1')
+      .then(r => r.json())
+      .then(data => {
+        const content = data.data[0];
+        document.getElementById('image-container').innerHTML = `
+          <h2>${content.title}</h2>
+          <p>image_url 존재: ${!!content.image_url}</p>
+          <p>image_url 길이: ${content.image_url ? content.image_url.length : 0}</p>
+          <p>image_url 시작: ${content.image_url ? content.image_url.substring(0, 50) : 'NULL'}</p>
+          <hr>
+          <img src="${content.image_url}" alt="test" style="max-width: 600px; border: 2px solid red;">
+        `;
+      })
+      .catch(e => {
+        document.getElementById('image-container').innerHTML = `에러: ${e.message}`;
+      });
+  </script>
+</body>
+</html>

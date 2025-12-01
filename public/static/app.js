@@ -478,64 +478,152 @@ async function loadContents() {
 // AI 생성 페이지 렌더링
 function renderGenerate(container) {
   container.innerHTML = `
-    <div class="bg-white rounded-lg shadow p-6 max-w-3xl mx-auto">
+    <div class="bg-white rounded-lg shadow p-6 max-w-4xl mx-auto">
       <h2 class="text-2xl font-bold mb-6">
-        <i class="fas fa-magic mr-2"></i>AI 콘텐츠 생성
+        <i class="fas fa-magic mr-2 text-purple-500"></i>AI 콘텐츠 생성
+        <span class="text-sm font-normal text-gray-500 ml-2">SEO · AEO · C-RANK · GEO 최적화</span>
       </h2>
       
       <form id="generate-form" class="space-y-6">
-        <div>
-          <label class="block text-sm font-medium mb-2">업체 선택 *</label>
-          <select name="client_id" required class="w-full border rounded px-3 py-2">
+        <!-- 1단계: 업체 선택 -->
+        <div class="border-l-4 border-blue-500 pl-4">
+          <label class="block text-sm font-medium mb-2">
+            <span class="bg-blue-500 text-white px-2 py-1 rounded text-xs mr-2">1</span>업체 선택 *
+          </label>
+          <select name="client_id" id="client_id" required class="w-full border rounded px-3 py-2">
             <option value="">업체를 선택하세요</option>
             ${state.clients.filter(c => c.openai_api_key || c.gemini_api_key).map(client => `
-              <option value="${client.id}">${client.name} ${client.gemini_api_key ? '(Gemini)' : ''} ${client.openai_api_key ? '(OpenAI)' : ''}</option>
+              <option value="${client.id}" data-business="${client.business_type || ''}">${client.name} ${client.gemini_api_key ? '(Gemini)' : ''} ${client.openai_api_key ? '(OpenAI)' : ''}</option>
             `).join('')}
           </select>
           <p class="text-xs text-gray-500 mt-1">API Key가 설정된 업체만 표시됩니다</p>
         </div>
 
-        <div>
-          <label class="block text-sm font-medium mb-2">키워드 *</label>
-          <input type="text" name="keywords" required placeholder="예: SEO, 마케팅, 블로그 (쉼표로 구분)" class="w-full border rounded px-3 py-2">
-          <p class="text-xs text-gray-500 mt-1">여러 키워드를 쉼표(,)로 구분하여 입력하세요</p>
-        </div>
-
-        <div>
-          <label class="block text-sm font-medium mb-2">제목 (선택)</label>
-          <input type="text" name="title" placeholder="비워두면 AI가 자동으로 생성합니다" class="w-full border rounded px-3 py-2">
-        </div>
-
-        <!-- 이미지 생성 섹션 -->
-        <div class="border-2 border-blue-200 rounded-lg p-4 bg-blue-50">
-          <div class="flex items-center mb-3">
-            <input type="checkbox" name="generate_image" id="generate_image" class="mr-3 w-5 h-5 text-blue-600">
-            <label for="generate_image" class="text-base font-semibold text-blue-900">
-              <i class="fas fa-image mr-2"></i>DALL-E 3로 썸네일 이미지 생성
-            </label>
+        <!-- 2단계: 트렌드 키워드 분석 -->
+        <div class="border-l-4 border-green-500 pl-4">
+          <label class="block text-sm font-medium mb-2">
+            <span class="bg-green-500 text-white px-2 py-1 rounded text-xs mr-2">2</span>트렌드 키워드 분석
+          </label>
+          
+          <div class="flex space-x-2 mb-3">
+            <input type="text" id="trend-query" placeholder="키워드 입력 (예: 미용실마케팅, 헤어살롱)" class="flex-1 border rounded px-3 py-2">
+            <button type="button" onclick="fetchTrendKeywords()" class="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600">
+              <i class="fas fa-search mr-2"></i>트렌드 분석
+            </button>
           </div>
           
-          <div id="image-prompt-container" class="hidden">
-            <label class="block text-sm font-medium mb-2 text-blue-900">
-              <i class="fas fa-palette mr-1"></i>이미지 생성 프롬프트 (영문 권장)
-            </label>
-            <input type="text" name="image_prompt" placeholder="예: Professional modern office workspace with laptop and coffee" class="w-full border-2 border-blue-300 rounded px-3 py-2 focus:border-blue-500 focus:outline-none">
-            <p class="text-xs text-blue-700 mt-1">
-              ■ 구체적으로 작성할수록 좋은 이미지가 생성됩니다
-            </p>
+          <!-- 트렌드 결과 표시 영역 -->
+          <div id="trend-results" class="hidden">
+            <!-- 네이버 블로그/뉴스 통계 -->
+            <div class="grid grid-cols-2 gap-4 mb-4">
+              <div class="bg-green-50 p-3 rounded">
+                <div class="text-xs text-green-600 mb-1"><i class="fas fa-blog mr-1"></i>네이버 블로그</div>
+                <div class="text-xl font-bold text-green-800" id="blog-count">-</div>
+              </div>
+              <div class="bg-blue-50 p-3 rounded">
+                <div class="text-xs text-blue-600 mb-1"><i class="fas fa-newspaper mr-1"></i>네이버 뉴스</div>
+                <div class="text-xl font-bold text-blue-800" id="news-count">-</div>
+              </div>
+            </div>
+            
+            <!-- AI 추천 키워드 -->
+            <div class="mb-4">
+              <div class="text-sm font-medium mb-2 text-purple-700">
+                <i class="fas fa-robot mr-1"></i>AI 추천 트렌드 키워드 (클릭하여 선택)
+              </div>
+              <div id="ai-keywords" class="flex flex-wrap gap-2">
+                <!-- AI 추천 키워드가 여기에 표시됨 -->
+              </div>
+            </div>
+            
+            <!-- 관련 블로그 미리보기 -->
+            <div class="mb-4">
+              <div class="text-sm font-medium mb-2 text-green-700">
+                <i class="fas fa-fire mr-1"></i>인기 블로그 글 (참고용)
+              </div>
+              <div id="blog-preview" class="space-y-2 max-h-40 overflow-y-auto">
+                <!-- 블로그 목록 -->
+              </div>
+            </div>
           </div>
+          
+          <!-- 로딩 표시 -->
+          <div id="trend-loading" class="hidden text-center py-4">
+            <i class="fas fa-spinner fa-spin text-2xl text-green-500"></i>
+            <p class="text-sm text-gray-500 mt-2">네이버 API + Gemini AI 분석 중...</p>
+          </div>
+        </div>
+
+        <!-- 3단계: 선택된 키워드 -->
+        <div class="border-l-4 border-purple-500 pl-4">
+          <label class="block text-sm font-medium mb-2">
+            <span class="bg-purple-500 text-white px-2 py-1 rounded text-xs mr-2">3</span>선택된 키워드 *
+          </label>
+          <div id="selected-keywords" class="flex flex-wrap gap-2 mb-2 min-h-[40px] border-2 border-dashed border-gray-300 rounded p-2">
+            <span class="text-gray-400 text-sm">위에서 키워드를 선택하거나 직접 입력하세요</span>
+          </div>
+          <input type="text" name="keywords" id="keywords-input" required placeholder="직접 입력: SEO, 마케팅, 블로그 (쉼표로 구분)" class="w-full border rounded px-3 py-2">
+          <p class="text-xs text-gray-500 mt-1">트렌드 키워드를 클릭하거나 직접 입력하세요</p>
+        </div>
+
+        <!-- 4단계: 제목 -->
+        <div class="border-l-4 border-orange-500 pl-4">
+          <label class="block text-sm font-medium mb-2">
+            <span class="bg-orange-500 text-white px-2 py-1 rounded text-xs mr-2">4</span>제목 (선택)
+          </label>
+          <input type="text" name="title" placeholder="비워두면 AI가 SEO 최적화 제목을 자동으로 생성합니다" class="w-full border rounded px-3 py-2">
+        </div>
+
+        <!-- 5단계: 이미지 생성 -->
+        <div class="border-l-4 border-pink-500 pl-4">
+          <label class="block text-sm font-medium mb-2">
+            <span class="bg-pink-500 text-white px-2 py-1 rounded text-xs mr-2">5</span>이미지 생성
+          </label>
+          <div class="border-2 border-pink-200 rounded-lg p-4 bg-pink-50">
+            <div class="flex items-center mb-3">
+              <input type="checkbox" name="generate_image" id="generate_image" class="mr-3 w-5 h-5 text-pink-600">
+              <label for="generate_image" class="text-base font-semibold text-pink-900">
+                <i class="fas fa-image mr-2"></i>Gemini로 한국형 썸네일 이미지 생성
+              </label>
+            </div>
+            
+            <div id="image-prompt-container" class="hidden">
+              <label class="block text-sm font-medium mb-2 text-pink-900">
+                <i class="fas fa-palette mr-1"></i>이미지 스타일 프롬프트
+              </label>
+              <input type="text" name="image_prompt" placeholder="예: 깔끔한 미용실 인테리어, 헤어 스타일링" class="w-full border-2 border-pink-300 rounded px-3 py-2 focus:border-pink-500 focus:outline-none">
+              <p class="text-xs text-pink-700 mt-1">
+                ■ 한국 블로그에 적합한 이미지가 생성됩니다
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- 최적화 설정 표시 -->
+        <div class="bg-gradient-to-r from-purple-50 to-blue-50 p-4 rounded-lg">
+          <div class="text-sm font-medium mb-2 text-purple-700">
+            <i class="fas fa-cog mr-1"></i>자동 적용되는 최적화
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <span class="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-xs"><i class="fas fa-search mr-1"></i>SEO</span>
+            <span class="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs"><i class="fas fa-robot mr-1"></i>AEO</span>
+            <span class="px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs"><i class="fas fa-chart-line mr-1"></i>C-RANK</span>
+            <span class="px-3 py-1 bg-orange-100 text-orange-700 rounded-full text-xs"><i class="fas fa-map-marker-alt mr-1"></i>GEO</span>
+            <span class="px-3 py-1 bg-pink-100 text-pink-700 rounded-full text-xs"><i class="fas fa-mobile-alt mr-1"></i>모바일 최적화</span>
+          </div>
+          <p class="text-xs text-gray-500 mt-2">업체의 시스템 프롬프트에 따라 SEO, AEO, C-RANK, GEO 최적화가 자동 적용됩니다.</p>
         </div>
 
         <div class="flex justify-end space-x-2">
           <button type="button" onclick="setView('dashboard')" class="px-6 py-2 border rounded hover:bg-gray-100">취소</button>
-          <button type="submit" class="px-6 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">
-            <i class="fas fa-magic mr-2"></i>생성하기
+          <button type="submit" class="px-6 py-2 bg-gradient-to-r from-purple-500 to-blue-500 text-white rounded hover:from-purple-600 hover:to-blue-600">
+            <i class="fas fa-magic mr-2"></i>AI 콘텐츠 생성
           </button>
         </div>
       </form>
 
       <div id="generation-result" class="hidden mt-6 p-4 bg-green-50 border border-green-200 rounded">
-        <p class="text-green-800 font-semibold">콘텐츠가 생성되었습니다!</p>
+        <p class="text-green-800 font-semibold"><i class="fas fa-check-circle mr-2"></i>콘텐츠가 생성되었습니다!</p>
         <button onclick="setView('contents')" class="mt-2 text-blue-500 hover:underline">콘텐츠 목록에서 확인하기</button>
       </div>
     </div>
@@ -550,9 +638,16 @@ function renderGenerate(container) {
   document.getElementById('generate-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const formData = new FormData(e.target);
+    const keywordsValue = formData.get('keywords');
+    
+    if (!keywordsValue || keywordsValue.trim() === '') {
+      showNotification('키워드를 입력해주세요', 'error');
+      return;
+    }
+    
     const data = {
       client_id: parseInt(formData.get('client_id')),
-      keywords: formData.get('keywords').split(',').map(k => k.trim()),
+      keywords: keywordsValue.split(',').map(k => k.trim()).filter(k => k),
       title: formData.get('title') || undefined,
       generate_image: formData.get('generate_image') === 'on',
       image_prompt: formData.get('image_prompt') || undefined,
@@ -560,20 +655,130 @@ function renderGenerate(container) {
 
     const submitBtn = e.target.querySelector('button[type="submit"]');
     submitBtn.disabled = true;
-    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>생성 중...';
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>AI 콘텐츠 생성 중... (30초~1분 소요)';
 
     try {
       await axios.post(`${API_BASE}/contents/generate`, data);
       document.getElementById('generation-result').classList.remove('hidden');
-      e.target.reset();
       showNotification('AI 콘텐츠가 생성되었습니다!', 'success');
     } catch (error) {
       showNotification(error.response?.data?.error || '콘텐츠 생성에 실패했습니다', 'error');
     } finally {
       submitBtn.disabled = false;
-      submitBtn.innerHTML = '<i class="fas fa-magic mr-2"></i>생성하기';
+      submitBtn.innerHTML = '<i class="fas fa-magic mr-2"></i>AI 콘텐츠 생성';
     }
   });
+}
+
+// 트렌드 키워드 분석 함수
+async function fetchTrendKeywords() {
+  const query = document.getElementById('trend-query').value.trim();
+  const clientId = document.getElementById('client_id').value;
+  
+  if (!query) {
+    showNotification('키워드를 입력해주세요', 'error');
+    return;
+  }
+  
+  // 로딩 표시
+  document.getElementById('trend-loading').classList.remove('hidden');
+  document.getElementById('trend-results').classList.add('hidden');
+  
+  try {
+    // 병렬로 API 호출
+    const [blogRes, newsRes, keywordsRes] = await Promise.all([
+      axios.get(`${API_BASE}/trends/blog?query=${encodeURIComponent(query)}`),
+      axios.get(`${API_BASE}/trends/news?query=${encodeURIComponent(query)}`),
+      axios.get(`${API_BASE}/trends/keywords?query=${encodeURIComponent(query)}${clientId ? '&client_id=' + clientId : ''}`)
+    ]);
+    
+    // 결과 표시
+    document.getElementById('blog-count').textContent = (blogRes.data.data?.total || blogRes.data.total || 0).toLocaleString() + '건';
+    document.getElementById('news-count').textContent = (newsRes.data.data?.total || newsRes.data.total || 0).toLocaleString() + '건';
+    
+    // AI 추천 키워드 표시
+    const aiKeywords = keywordsRes.data.data?.keywords || [];
+    const aiKeywordsContainer = document.getElementById('ai-keywords');
+    if (aiKeywords.length > 0) {
+      aiKeywordsContainer.innerHTML = aiKeywords.map(kw => `
+        <button type="button" onclick="addKeyword('${kw.replace(/'/g, "\\'")}')" 
+                class="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-sm hover:bg-purple-200 transition">
+          <i class="fas fa-plus mr-1"></i>${kw}
+        </button>
+      `).join('');
+    } else {
+      aiKeywordsContainer.innerHTML = '<span class="text-gray-400 text-sm">AI 추천 키워드 없음</span>';
+    }
+    
+    // 블로그 미리보기
+    const blogs = blogRes.data.data?.blogs || [];
+    const blogPreviewContainer = document.getElementById('blog-preview');
+    if (blogs.length > 0) {
+      blogPreviewContainer.innerHTML = blogs.slice(0, 5).map(blog => `
+        <a href="${blog.link}" target="_blank" class="block p-2 bg-white rounded hover:bg-gray-50 border text-sm">
+          <div class="font-medium text-blue-600 truncate">${blog.title.replace(/<[^>]*>/g, '')}</div>
+          <div class="text-xs text-gray-500 truncate">${blog.description.replace(/<[^>]*>/g, '')}</div>
+        </a>
+      `).join('');
+    } else {
+      blogPreviewContainer.innerHTML = '<span class="text-gray-400 text-sm">블로그 없음</span>';
+    }
+    
+    // 기본 키워드 추가
+    addKeyword(query);
+    
+    document.getElementById('trend-results').classList.remove('hidden');
+    showNotification('트렌드 분석 완료!', 'success');
+    
+  } catch (error) {
+    console.error('트렌드 분석 실패:', error);
+    showNotification('트렌드 분석에 실패했습니다', 'error');
+  } finally {
+    document.getElementById('trend-loading').classList.add('hidden');
+  }
+}
+
+// 키워드 추가 함수
+function addKeyword(keyword) {
+  const input = document.getElementById('keywords-input');
+  const container = document.getElementById('selected-keywords');
+  const currentKeywords = input.value.split(',').map(k => k.trim()).filter(k => k);
+  
+  if (!currentKeywords.includes(keyword)) {
+    currentKeywords.push(keyword);
+    input.value = currentKeywords.join(', ');
+    
+    // 선택된 키워드 표시 업데이트
+    updateSelectedKeywordsDisplay();
+  }
+}
+
+// 키워드 삭제 함수
+function removeKeyword(keyword) {
+  const input = document.getElementById('keywords-input');
+  const currentKeywords = input.value.split(',').map(k => k.trim()).filter(k => k && k !== keyword);
+  input.value = currentKeywords.join(', ');
+  updateSelectedKeywordsDisplay();
+}
+
+// 선택된 키워드 표시 업데이트
+function updateSelectedKeywordsDisplay() {
+  const input = document.getElementById('keywords-input');
+  const container = document.getElementById('selected-keywords');
+  const keywords = input.value.split(',').map(k => k.trim()).filter(k => k);
+  
+  if (keywords.length === 0) {
+    container.innerHTML = '<span class="text-gray-400 text-sm">위에서 키워드를 선택하거나 직접 입력하세요</span>';
+  } else {
+    container.innerHTML = keywords.map(kw => `
+      <span class="px-3 py-1 bg-purple-500 text-white rounded-full text-sm flex items-center">
+        ${kw}
+        <button type="button" onclick="removeKeyword('${kw.replace(/'/g, "\\'")}')" class="ml-2 hover:text-red-200">
+          <i class="fas fa-times"></i>
+        </button>
+      </span>
+    `).join('');
+  }
 }
 
 // 유틸리티 함수들

@@ -6,6 +6,9 @@ import clientsApi from './api/clients'
 import contentsApi from './api/contents'
 import customizerApi from './api/wordpress-customizer'
 import trendsApi from './api/trends'
+import projectsApi from './api/projects'
+import activityLogsApi from './api/activity-logs'
+import dashboardApi from './api/dashboard'
 import { rateLimit, securityHeaders, csrfProtection } from './middleware/security'
 
 type Bindings = {
@@ -42,6 +45,9 @@ app.route('/api/clients', clientsApi)
 app.route('/api/contents', contentsApi)
 app.route('/api/customizer', customizerApi)
 app.route('/api/trends', trendsApi)
+app.route('/api/projects', projectsApi)
+app.route('/api/activity-logs', activityLogsApi)
+app.route('/api/dashboard', dashboardApi)
 
 // 렌더러
 app.use(renderer)

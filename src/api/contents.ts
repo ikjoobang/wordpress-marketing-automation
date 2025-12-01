@@ -30,10 +30,14 @@ app.use('/generate', validateContentGeneration());
 
 /**
  * Gemini 2.0 Flash를 사용한 콘텐츠 생성
+ * @param keywords - 키워드 배열
+ * @param title - 제목 (선택)
+ * @param systemPrompt - 업체별 시스템 프롬프트 (업체 설정에서 가져옴)
  */
 async function generateContentWithGemini(
   keywords: string[],
-  title?: string
+  title?: string,
+  systemPrompt?: string
 ): Promise<{ title: string; content: string; excerpt: string }> {
   
   // 실전 블로그 마케팅 전략 통합 프롬프트
@@ -119,7 +123,12 @@ async function generateContentWithGemini(
   <h3>Q1: 구체적 질문?</h3>
   <p>명확한 답변</p>
 
-총 1500-2000자 분량으로 작성하되, 독자가 끝까지 읽고 행동하게 만드는 글을 작성해주세요.`
+총 1500-2000자 분량으로 작성하되, 독자가 끝까지 읽고 행동하게 만드는 글을 작성해주세요.
+
+${systemPrompt ? `
+■ 업체 맞춤 지침 (반드시 준수):
+${systemPrompt}
+` : ''}`
     : `키워드: ${keywords.join(', ')}
 
 다음 요구사항을 모두 충족하는 실전 블로그 마케팅 글을 작성해주세요:
@@ -161,7 +170,12 @@ async function generateContentWithGemini(
   <h3>Q1: 질문?</h3>
   <p>명확한 답변</p>
 
-1500-2000자 분량으로, 독자가 끝까지 읽고 행동하게 만드는 글을 작성.`;
+1500-2000자 분량으로, 독자가 끝까지 읽고 행동하게 만드는 글을 작성.
+
+${systemPrompt ? `
+■ 업체 맞춤 지침 (반드시 준수):
+${systemPrompt}
+` : ''}`;
 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_TEXT_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
   
@@ -323,9 +337,11 @@ app.post('/generate', async (c) => {
     }
 
     // Gemini 2.0 Flash로 콘텐츠 생성 (OpenAI 키 불필요)
+    // ★ 업체의 system_prompt를 반드시 전달 ★
     const generated = await generateContentWithGemini(
       body.keywords,
-      body.title
+      body.title,
+      client.system_prompt || undefined  // 업체별 맞춤 프롬프트 적용
     );
 
     // Gemini 2.0 Flash로 이미지 생성 (옵션) - 한국인/한국배경 자연스러운 아이폰 스타일

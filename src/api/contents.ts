@@ -166,12 +166,18 @@ ${title ? `제목: "${title}"` : ''}
  * - 텍스트/글자 절대 포함 금지
  */
 async function generateImageWithGemini(userPrompt: string, keywords: string[]): Promise<string> {
+  // 특정 인물 이름 제거 (초상권/명예훼손 방지)
+  const sanitizedPrompt = userPrompt
+    .replace(/김미경\s*(지사장|대표|사장)?/gi, '전문 비즈니스 리더')
+    .replace(/[가-힣]{2,4}\s*(지사장|대표|사장|팀장|본부장)/gi, '전문 비즈니스 리더')
+    .replace(/특정\s*인물/gi, '비즈니스 전문가');
+
   const enhancedPrompt = `Generate a photorealistic image:
 
-${userPrompt}
+${sanitizedPrompt}
 
 CRITICAL STYLE REQUIREMENTS for authentic Korean photo:
-- Real Korean person with natural Korean facial features
+- Generic anonymous Korean business professional (NO specific real person)
 - Modern Seoul urban setting (trendy cafe, Gangnam street, Hongdae area)
 - Candid iPhone 15 Pro photo style - NOT staged or posed
 - Natural soft daylight or warm cafe lighting
@@ -181,6 +187,7 @@ CRITICAL STYLE REQUIREMENTS for authentic Korean photo:
 - Real-life depth of field, slight background blur
 
 ABSOLUTE RESTRICTIONS - MUST FOLLOW:
+- NO specific real person's likeness - only generic anonymous people
 - NO TEXT of any kind (Korean, English, numbers, logos, watermarks)
 - NO letters, words, characters, typography, captions, labels
 - NO signs, banners, posters with text
@@ -251,22 +258,32 @@ async function replaceImagePlaceholders(
     
     // placeholder에서 이미지 설명 추출
     const descMatch = placeholder.match(/\[이미지:\s*([^\]]+)\]/i);
-    const imageDesc = descMatch ? descMatch[1].trim() : `${keywords[0]} 관련 이미지`;
+    let imageDesc = descMatch ? descMatch[1].trim() : `${keywords[0]} 관련 이미지`;
     
-    console.log(`이미지 ${i + 1}/${imagesToGenerate.length} 생성 중: ${imageDesc}`);
+    // ★ 특정 인물 이름 제거 (초상권/명예훼손 방지) ★
+    const sanitizedDesc = imageDesc
+      .replace(/김미경\s*(지사장|대표|사장)?/gi, '전문 비즈니스 리더')
+      .replace(/[가-힣]{2,4}\s*(지사장|대표|사장|팀장|본부장)/gi, '전문 비즈니스 리더')
+      .replace(/특정\s*인물/gi, '비즈니스 전문가');
+    
+    // alt_text용 (특정 인물 언급 제거)
+    const safeAltText = sanitizedDesc;
+    
+    console.log(`이미지 ${i + 1}/${imagesToGenerate.length} 생성 중: ${sanitizedDesc}`);
     
     try {
-      // 이미지 생성
-      const imagePrompt = `Korean professional photo: ${imageDesc}. 
-Style: Modern Seoul office or business setting, warm natural lighting, iPhone photo style.`;
+      // 이미지 생성 (특정 인물 이름 제거된 프롬프트 사용)
+      const imagePrompt = `Korean professional photo: ${sanitizedDesc}. 
+Style: Modern Seoul office or business setting, warm natural lighting, iPhone photo style.
+IMPORTANT: Generic anonymous person only, NOT a specific real individual.`;
       
       const base64Image = await generateImageWithGemini(imagePrompt, keywords);
       
-      // content_images 테이블에 저장
+      // content_images 테이블에 저장 (안전한 alt_text 사용)
       const imgResult = await db.prepare(`
         INSERT INTO content_images (content_id, image_data, alt_text, position)
         VALUES (?, ?, ?, ?)
-      `).bind(contentId, base64Image, imageDesc, i).run();
+      `).bind(contentId, base64Image, safeAltText, i).run();
       
       const imageId = imgResult.meta.last_row_id;
       const imageApiUrl = `/api/contents/${contentId}/images/${imageId}`;
@@ -277,10 +294,10 @@ Style: Modern Seoul office or business setting, warm natural lighting, iPhone ph
         thumbnailUrl = imageApiUrl;
       }
       
-      // placeholder를 img 태그로 교체 (API URL 참조)
+      // placeholder를 img 태그로 교체 (API URL 참조, 안전한 alt_text 사용)
       const imgTag = `<div class="content-image" style="margin: 20px 0; text-align: center;">
-  <img src="${imageApiUrl}" alt="${imageDesc}" style="max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);" loading="lazy">
-  <p style="font-size: 12px; color: #666; margin-top: 8px;">${imageDesc}</p>
+  <img src="${imageApiUrl}" alt="${safeAltText}" style="max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);" loading="lazy">
+  <p style="font-size: 12px; color: #666; margin-top: 8px;">${safeAltText}</p>
 </div>`;
       
       updatedContent = updatedContent.replace(placeholder, imgTag);

@@ -212,7 +212,8 @@ async function loadClients() {
 }
 
 // 업체 관리 렌더링
-function renderClients(container) {
+async function renderClients(container) {
+  // 로딩 표시
   container.innerHTML = `
     <div class="bg-white rounded-lg shadow p-6">
       <div class="flex justify-between items-center mb-6">
@@ -223,47 +224,89 @@ function renderClients(container) {
           <i class="fas fa-plus mr-2"></i>새 업체 등록
         </button>
       </div>
-
       <div id="clients-list" class="space-y-4">
-        ${state.clients.map(client => `
-          <div class="border rounded-lg p-4 hover:shadow-md transition">
-            <div class="flex justify-between items-start">
-              <div class="flex-1">
-                <h3 class="text-lg font-semibold">${client.name}</h3>
-                <p class="text-gray-600 text-sm">${client.wordpress_url}</p>
-                <p class="text-gray-500 text-sm mt-2">${client.description || '설명 없음'}</p>
-                <div class="mt-2">
-                  <span class="inline-block px-2 py-1 rounded text-xs ${client.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}">
-                    ${client.is_active ? '활성' : '비활성'}
-                  </span>
-                  ${client.openai_api_key ? '<span class="inline-block px-2 py-1 rounded text-xs bg-blue-100 text-blue-800 ml-2">OpenAI 연동</span>' : ''}
-                </div>
-              </div>
-              <div class="flex space-x-2">
-                <button onclick="viewClientStats(${client.id})" class="text-blue-500 hover:text-blue-700">
-                  <i class="fas fa-chart-bar"></i>
-                </button>
-                <button onclick="editClient(${client.id})" class="text-green-500 hover:text-green-700">
-                  <i class="fas fa-edit"></i>
-                </button>
-                <button onclick="deleteClient(${client.id})" class="text-red-500 hover:text-red-700">
-                  <i class="fas fa-trash"></i>
-                </button>
-              </div>
-            </div>
-          </div>
-        `).join('') || '<p class="text-gray-500 text-center py-8">등록된 업체가 없습니다</p>'}
+        <p class="text-gray-500 text-center py-8"><i class="fas fa-spinner fa-spin mr-2"></i>업체 목록을 불러오는 중...</p>
       </div>
     </div>
+  `;
 
-    <!-- 업체 등록 모달 -->
+  // 최신 데이터 로드
+  try {
+    const response = await axios.get(`${API_BASE}/clients`);
+    state.clients = response.data.data || [];
+  } catch (error) {
+    console.error('업체 목록 로드 실패:', error);
+    document.getElementById('clients-list').innerHTML = '<p class="text-red-500 text-center py-8">업체 목록을 불러오는데 실패했습니다</p>';
+    return;
+  }
+
+  // 업체 목록 렌더링
+  const clientsList = document.getElementById('clients-list');
+  if (state.clients.length === 0) {
+    clientsList.innerHTML = '<p class="text-gray-500 text-center py-8">등록된 업체가 없습니다</p>';
+  } else {
+    clientsList.innerHTML = state.clients.map(client => `
+      <div class="border rounded-lg p-4 hover:shadow-md transition">
+        <div class="flex justify-between items-start">
+          <div class="flex-1">
+            <h3 class="text-lg font-semibold">${client.name}</h3>
+            <p class="text-gray-600 text-sm">${client.wordpress_url}</p>
+            <p class="text-gray-500 text-sm mt-2">${client.description || '설명 없음'}</p>
+            <div class="mt-2 flex flex-wrap gap-2">
+              <span class="inline-block px-2 py-1 rounded text-xs ${client.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}">
+                ${client.is_active ? '활성' : '비활성'}
+              </span>
+              ${client.openai_api_key ? '<span class="inline-block px-2 py-1 rounded text-xs bg-blue-100 text-blue-800">OpenAI</span>' : ''}
+              ${client.gemini_api_key ? '<span class="inline-block px-2 py-1 rounded text-xs bg-purple-100 text-purple-800">Gemini</span>' : ''}
+              ${client.auto_publish ? '<span class="inline-block px-2 py-1 rounded text-xs bg-orange-100 text-orange-800"><i class="fas fa-clock mr-1"></i>자동발행</span>' : ''}
+              ${client.business_type ? '<span class="inline-block px-2 py-1 rounded text-xs bg-gray-100 text-gray-700">' + client.business_type + '</span>' : ''}
+            </div>
+          </div>
+          <div class="flex space-x-2">
+            <button onclick="viewClientStats(${client.id})" class="text-blue-500 hover:text-blue-700" title="통계">
+              <i class="fas fa-chart-bar"></i>
+            </button>
+            <button onclick="editClient(${client.id})" class="text-green-500 hover:text-green-700" title="수정">
+              <i class="fas fa-edit"></i>
+            </button>
+            <button onclick="deleteClient(${client.id})" class="text-red-500 hover:text-red-700" title="삭제">
+              <i class="fas fa-trash"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  // 기존 모달 제거 후 새로 추가
+  const existingModal = document.getElementById('add-client-modal');
+  if (existingModal) existingModal.remove();
+
+  // 업체 등록 모달 추가
+  const modalHtml = `
     <div id="add-client-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div class="bg-white rounded-lg p-6 max-w-2xl w-full mx-4">
+      <div class="bg-white rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
         <h3 class="text-xl font-bold mb-4">새 업체 등록</h3>
         <form id="add-client-form" class="space-y-4">
           <div>
             <label class="block text-sm font-medium mb-1">업체명 *</label>
             <input type="text" name="name" required class="w-full border rounded px-3 py-2">
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-1">업종</label>
+            <select name="business_type" class="w-full border rounded px-3 py-2">
+              <option value="">선택하세요</option>
+              <option value="beauty">미용실/헤어살롱</option>
+              <option value="restaurant">음식점/카페</option>
+              <option value="medical">병원/의료</option>
+              <option value="fitness">피트니스/헬스</option>
+              <option value="education">교육/학원</option>
+              <option value="insurance">보험/금융</option>
+              <option value="realestate">부동산</option>
+              <option value="legal">법률/세무</option>
+              <option value="it">IT/기술</option>
+              <option value="other">기타</option>
+            </select>
           </div>
           <div>
             <label class="block text-sm font-medium mb-1">설명</label>
@@ -282,22 +325,62 @@ function renderClients(container) {
             <input type="password" name="wordpress_password" required class="w-full border rounded px-3 py-2">
             <p class="text-xs text-gray-500 mt-1">워드프레스 관리자 → 사용자 → 프로필에서 생성</p>
           </div>
-          <div>
-            <label class="block text-sm font-medium mb-1">OpenAI API Key</label>
-            <input type="password" name="openai_api_key" class="w-full border rounded px-3 py-2">
+          
+          <!-- API Keys 섹션 -->
+          <div class="border-t pt-4 mt-4">
+            <h4 class="font-medium mb-3 text-purple-700"><i class="fas fa-key mr-2"></i>AI API 설정</h4>
+            <div class="space-y-4">
+              <div>
+                <label class="block text-sm font-medium mb-1">OpenAI API Key</label>
+                <input type="password" name="openai_api_key" class="w-full border rounded px-3 py-2">
+              </div>
+              <div>
+                <label class="block text-sm font-medium mb-1">Gemini API Key</label>
+                <input type="password" name="gemini_api_key" class="w-full border rounded px-3 py-2">
+              </div>
+            </div>
           </div>
+          
           <div>
-            <label class="block text-sm font-medium mb-1">시스템 프롬프트</label>
-            <textarea name="system_prompt" rows="3" class="w-full border rounded px-3 py-2" placeholder="AI가 콘텐츠를 생성할 때 사용할 지침을 입력하세요"></textarea>
+            <label class="block text-sm font-medium mb-1">시스템 프롬프트 (AI 작성 지침)</label>
+            <textarea name="system_prompt" rows="3" class="w-full border rounded px-3 py-2" placeholder="AI가 콘텐츠를 생성할 때 따를 지침을 입력하세요..."></textarea>
+            <p class="text-xs text-yellow-600 mt-1">💡 SEO, AEO, C-RANK, GEO 최적화 등 원하는 전략을 입력하세요</p>
           </div>
-          <div class="flex justify-end space-x-2">
+          
+          <!-- 자동 발행 설정 -->
+          <div class="border-t pt-4 mt-4">
+            <h4 class="font-medium mb-3 text-blue-700"><i class="fas fa-clock mr-2"></i>자동 발행 설정</h4>
+            <div class="flex items-center mb-3">
+              <input type="checkbox" name="auto_publish" id="auto_publish" class="mr-2 w-4 h-4">
+              <label for="auto_publish" class="text-sm">자동 발행 활성화</label>
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-medium mb-1">발행 시간</label>
+                <input type="time" name="publish_time" value="09:00" class="w-full border rounded px-3 py-2">
+              </div>
+              <div>
+                <label class="block text-sm font-medium mb-1">발행 빈도</label>
+                <select name="publish_frequency" class="w-full border rounded px-3 py-2">
+                  <option value="daily">매일</option>
+                  <option value="weekdays">평일만</option>
+                  <option value="weekly">매주</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          
+          <div class="flex justify-end space-x-2 pt-4">
             <button type="button" onclick="hideAddClientModal()" class="px-4 py-2 border rounded hover:bg-gray-100">취소</button>
-            <button type="submit" class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">등록</button>
+            <button type="submit" class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"><i class="fas fa-save mr-2"></i>저장</button>
           </div>
         </form>
       </div>
     </div>
   `;
+  
+  // DOM에 모달 추가
+  document.body.insertAdjacentHTML('beforeend', modalHtml);
 
   // 폼 제출 핸들러
   document.getElementById('add-client-form').addEventListener('submit', async (e) => {
@@ -405,10 +488,11 @@ function renderGenerate(container) {
           <label class="block text-sm font-medium mb-2">업체 선택 *</label>
           <select name="client_id" required class="w-full border rounded px-3 py-2">
             <option value="">업체를 선택하세요</option>
-            ${state.clients.filter(c => c.openai_api_key).map(client => `
-              <option value="${client.id}">${client.name}</option>
+            ${state.clients.filter(c => c.openai_api_key || c.gemini_api_key).map(client => `
+              <option value="${client.id}">${client.name} ${client.gemini_api_key ? '(Gemini)' : ''} ${client.openai_api_key ? '(OpenAI)' : ''}</option>
             `).join('')}
           </select>
+          <p class="text-xs text-gray-500 mt-1">API Key가 설정된 업체만 표시됩니다</p>
         </div>
 
         <div>

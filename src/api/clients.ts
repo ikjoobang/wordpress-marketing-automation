@@ -84,16 +84,33 @@ app.post('/', async (c) => {
     //   }, 400);
     // }
 
+    // 추가 필드 처리
+    const autoPublish = (body as any).auto_publish === 'on' || (body as any).auto_publish === true ? 1 : 0;
+    const publishTime = (body as any).publish_time || '09:00';
+    const publishFrequency = (body as any).publish_frequency || 'daily';
+    const description = (body as any).description || null;
+    const openaiApiKey = (body as any).openai_api_key || null;
+    const systemPrompt = (body as any).system_prompt || null;
+    const businessType = (body as any).business_type || null;
+
     // 클라이언트 등록
     const result = await c.env.DB.prepare(`
       INSERT INTO clients (
-        name, wordpress_url, wordpress_username, wordpress_password
-      ) VALUES (?, ?, ?, ?)
+        name, description, wordpress_url, wordpress_username, wordpress_password,
+        openai_api_key, system_prompt, business_type, auto_publish, publish_time, publish_frequency, is_active
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
     `).bind(
       body.name,
+      description,
       body.wordpress_url,
       body.wordpress_username,
-      body.wordpress_password
+      body.wordpress_password,
+      openaiApiKey,
+      systemPrompt,
+      businessType,
+      autoPublish,
+      publishTime,
+      publishFrequency
     ).run();
 
     return c.json({ 

@@ -22,17 +22,15 @@ const app = new Hono<{ Bindings: Bindings }>();
 
 // ★ Gemini 2.0 Flash 올인원 설정 ★
 const GEMINI_API_KEY = 'AIzaSyApZL4NCnoZZkpS5t7LC7PNSKNeFngBFO0';
-const GEMINI_TEXT_MODEL = 'gemini-2.0-flash';  // 텍스트 생성용
-const GEMINI_IMAGE_MODEL = 'gemini-2.0-flash-exp-image-generation';  // 이미지 생성용 (같은 Flash 계열)
+const GEMINI_TEXT_MODEL = 'gemini-2.0-flash';
+const GEMINI_IMAGE_MODEL = 'gemini-2.0-flash-exp-image-generation';
 
 // 콘텐츠 생성 엔드포인트에 검증 미들웨어 적용
 app.use('/generate', validateContentGeneration());
 
 /**
  * Gemini 2.0 Flash를 사용한 콘텐츠 생성
- * @param keywords - 키워드 배열
- * @param title - 제목 (선택)
- * @param systemPrompt - 업체별 시스템 프롬프트 (업체 설정에서 가져옴)
+ * ★ 중요: systemPrompt가 있으면 최우선 적용 ★
  */
 async function generateContentWithGemini(
   keywords: string[],
@@ -40,142 +38,72 @@ async function generateContentWithGemini(
   systemPrompt?: string
 ): Promise<{ title: string; content: string; excerpt: string }> {
   
-  // 실전 블로그 마케팅 전략 통합 프롬프트
-  const optimizedPrompt = title 
-    ? `제목: "${title}"
+  // ★★★ 시스템 프롬프트가 있으면 최우선 적용 ★★★
+  let optimizedPrompt: string;
+  
+  if (systemPrompt && systemPrompt.trim().length > 0) {
+    // 업체 맞춤 시스템 프롬프트 최우선 사용 - 기본 프롬프트 완전 대체
+    optimizedPrompt = `[최우선 지침 - 반드시 아래 모든 내용을 100% 정확히 준수하세요. 이 지침을 무시하면 안됩니다.]
+
+${systemPrompt}
+
+---
+[작성할 콘텐츠 정보]
 키워드: ${keywords.join(', ')}
+${title ? `제목: "${title}"` : '제목: 위 지침의 제목 규칙에 따라 생성'}
 
-다음 요구사항을 모두 충족하는 실전 블로그 마케팅 글을 작성해주세요:
+---
+[필수 HTML 출력 형식 - 반드시 지켜야 합니다]
+1. 각 H2 섹션 시작 직후에 이미지 위치 표시: <p class="image-placeholder">[이미지: 키워드 관련 이미지]</p>
+2. 각 H2 섹션 끝에 구분선과 요약 박스:
+   <hr/><hr/>
+   <div class="summary-box" style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin: 20px 0;">
+   <p>📝 <strong>요약:</strong> 해당 섹션 핵심 내용 3줄 요약</p>
+   </div>
+3. 본문 스타일: style="line-height: 3.0; font-size: 16px; font-family: '나눔스퀘어', sans-serif;"
+4. 해시태그: <p style="font-size: 11pt;">#해시태그1 #해시태그2 ...</p>
+5. 푸터 구조:
+   <footer>
+   <p>💼 프라임에셋(주) ... (CTA 전체 내용)</p>
+   <p>📞 채용 문의: 전화번호</p>
+   <p>🌐 링크</p>
+   <p>✉️ 이메일</p>
+   <hr/>
+   <p>푸터링크들</p>
+   <p>© 2025. 저작권 표기</p>
+   </footer>`;
+  } else {
+    // 기본 프롬프트 (시스템 프롬프트 없는 경우)
+    optimizedPrompt = `키워드: ${keywords.join(', ')}
+${title ? `제목: "${title}"` : ''}
 
-■ 검색 최적화 전략 (SEO/AEO/GEO 통합):
-  ❶ 제목 최적화:
-    - 주요 키워드를 제목 앞부분에 배치
-    - 숫자, 질문형, 강력한 동사 활용으로 클릭률 극대화
-    - 예: "2024년 최신", "5가지 방법", "완벽 가이드"
-  
-  ❷ 구조화된 콘텐츠:
-    - H1(메인 제목) → H2(주요 섹션) → H3(세부 항목) 계층 준수
-    - 검색 엔진과 AI가 이해하기 쉬운 명확한 구조
-    - 키워드 밀도 2-3% 자연스럽게 유지
-  
-  ❸ 답변 중심 작성 (AEO):
-    - 사용자의 검색 의도에 정확히 답변
-    - "무엇", "어떻게", "왜", "언제" 질문에 직접 답변
-    - 도입부에 핵심 답변 먼저 제시
-    - 단락별로 하나의 명확한 메시지 전달
+네이버 블로그 스타일의 마케팅 글을 작성해주세요:
 
-■ 신뢰도 구축 전략 (C-RANK):
-  ❶ 전문성 표현:
-    - 업계 전문 용어를 정확하게 사용
-    - 구체적 수치, 통계, 연구 결과 인용
-    - 단계별 실행 가이드 제공
-  
-  �② 실용성 강화:
-    - 즉시 적용 가능한 실전 팁 제공
-    - 구체적 사례와 예시 포함
-    - 체크리스트, 비교표 등 실용적 형식 활용
+■ 구조:
+- H1: 메인 제목 (2025년, 숫자 포함, 60자 이내)
+- H2: 주요 섹션 3-5개 (❶❷❸ 이모지 사용)
+- 각 H2 섹션 시작에 이미지 위치 표시
+- 각 H2 섹션 끝에 <hr/><hr/> + 📝 요약 박스
 
-■ 블로그 마케팅 핵심 원칙:
-  ❶ 독자 중심 작성:
-    - 독자의 문제를 명확히 파악하고 해결책 제시
-    - 전문 용어는 쉽게 풀어서 설명
-    - 읽기 쉬운 짧은 문장과 단락 사용
-  
-  ❷ 행동 유도:
-    - 각 섹션마다 작은 액션 아이템 제시
-    - 글 마지막에 명확한 CTA (Call-to-Action)
-    - 댓글, 공유, 문의 등 참여 유도
-  
-  ❸ 지역 타겟팅 (해당 시):
-    - 지역명을 자연스럽게 본문에 통합
-    - "근처", "지역", "~에서" 등 로컬 키워드 활용
-    - 지역 특화 정보 제공
+■ 스타일:
+- 시각 계층: ❶❷❸❹❺, ■, ✔️, <strong>, <em>
+- 친근한 톤: ~하신가요?, 대표님, 사장님
 
-■ 콘텐츠 구성:
-  ❶ 도입부 (100-150자):
-    - 독자의 문제/고민 공감
-    - 핵심 해결책 미리보기
-    - 읽어야 하는 이유 제시
-  
-  ❷ 본문 (1200-1500자):
-    - 3-5개 주요 섹션 (H2)
-    - 각 섹션마다 2-3개 세부 항목 (H3)
-    - 리스트, 번호, 강조 등 다양한 형식 활용
-  
-  ❸ 결론 및 FAQ (200-300자):
-    - 핵심 내용 요약
-    - 구체적 행동 지침
-    - 3-5개 FAQ 질문/답변
+■ 필수 요소:
+- 본문 1,800~2,000자 (공백 제외)
+- FAQ 7-10개
+- 해시태그 10개 이상
+- CTA 섹션
 
-■ HTML 구조 예시:
-  <h1>메인 제목 (키워드 포함)</h1>
-  <p><strong>도입부: 문제 인식 및 해결 방향</strong></p>
-  
-  <h2>첫 번째 주요 섹션</h2>
-  <h3>세부 항목 1</h3>
-  <p>구체적 설명과 예시</p>
-  <ul><li>실전 팁 1</li><li>실전 팁 2</li></ul>
-  
-  <h2>두 번째 주요 섹션</h2>
-  <p>데이터와 근거 기반 설명</p>
-  
-  <h2>자주 묻는 질문 (FAQ)</h2>
-  <h3>Q1: 구체적 질문?</h3>
-  <p>명확한 답변</p>
+■ SEO:
+- 키워드 밀도 2-3%
+- H1-H3 계층 구조`;
+  }
 
-총 1500-2000자 분량으로 작성하되, 독자가 끝까지 읽고 행동하게 만드는 글을 작성해주세요.
-
-${systemPrompt ? `
-■ 업체 맞춤 지침 (반드시 준수):
-${systemPrompt}
-` : ''}`
-    : `키워드: ${keywords.join(', ')}
-
-다음 요구사항을 모두 충족하는 실전 블로그 마케팅 글을 작성해주세요:
-
-■ 제목 생성 전략:
-  - 숫자 활용: "7가지 방법", "2024년 TOP 10"
-  - 질문형: "어떻게 ~할까?", "왜 ~해야 할까?"
-  - 강력한 수식어: "완벽한", "검증된", "전문가가 알려주는"
-  - 주요 키워드를 제목 앞부분에 배치
-  - 60자 이내로 간결하게
-
-■ 검색 최적화 (SEO/AEO/GEO):
-  - H1, H2, H3 계층 구조 명확히
-  - 키워드 밀도 2-3% 자연스럽게
-  - 도입부에 핵심 답변 먼저 제시
-  - "무엇", "어떻게", "왜" 질문에 직접 답변
-  - 지역 키워드 자연스럽게 포함 (해당 시)
-
-■ 신뢰도 구축 (C-RANK):
-  - 구체적 수치와 데이터 제시
-  - 전문 용어 정확히 사용
-  - 단계별 실행 가이드
-  - 실전 팁과 사례 포함
-
-■ 블로그 마케팅 핵심:
-  - 독자의 문제 파악 및 해결책 제시
-  - 짧은 문장과 단락으로 가독성 확보
-  - 리스트, 번호, 강조 활용
-  - 각 섹션마다 작은 액션 아이템
-  - 마지막에 명확한 행동 유도 (CTA)
-
-■ 구성:
-  <h1>키워드 포함 제목</h1>
-  <p>도입부: 문제 공감 + 해결 방향</p>
-  <h2>주요 섹션 1</h2>
-  <h3>세부 항목</h3>
-  <p>구체적 설명</p>
-  <h2>FAQ</h2>
-  <h3>Q1: 질문?</h3>
-  <p>명확한 답변</p>
-
-1500-2000자 분량으로, 독자가 끝까지 읽고 행동하게 만드는 글을 작성.
-
-${systemPrompt ? `
-■ 업체 맞춤 지침 (반드시 준수):
-${systemPrompt}
-` : ''}`;
+  console.log('=== generateContentWithGemini ===');
+  console.log('systemPrompt 존재:', !!systemPrompt);
+  console.log('systemPrompt 길이:', systemPrompt?.length || 0);
+  console.log('최종 프롬프트 길이:', optimizedPrompt.length);
 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_TEXT_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
   
@@ -188,7 +116,7 @@ ${systemPrompt}
       contents: [{ parts: [{ text: optimizedPrompt }] }],
       generationConfig: {
         temperature: 0.7,
-        maxOutputTokens: 4000,
+        maxOutputTokens: 8192,  // 토큰 제한 증가 (4000 -> 8192)
       },
     }),
   });

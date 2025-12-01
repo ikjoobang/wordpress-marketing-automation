@@ -685,19 +685,32 @@ async function fetchTrendKeywords() {
   document.getElementById('trend-results').classList.add('hidden');
   
   try {
-    // 병렬로 API 호출
-    const [blogRes, newsRes, keywordsRes] = await Promise.all([
+    // 병렬로 API 호출 (news API는 keyword 파라미터 사용)
+    const [blogRes, newsRes, keywordsRes] = await Promise.allSettled([
       axios.get(`${API_BASE}/trends/blog?query=${encodeURIComponent(query)}`),
-      axios.get(`${API_BASE}/trends/news?query=${encodeURIComponent(query)}`),
+      axios.get(`${API_BASE}/trends/news?keyword=${encodeURIComponent(query)}`),
       axios.get(`${API_BASE}/trends/keywords?query=${encodeURIComponent(query)}${clientId ? '&client_id=' + clientId : ''}`)
     ]);
     
-    // 결과 표시
-    document.getElementById('blog-count').textContent = (blogRes.data.data?.total || blogRes.data.total || 0).toLocaleString() + '건';
-    document.getElementById('news-count').textContent = (newsRes.data.data?.total || newsRes.data.total || 0).toLocaleString() + '건';
+    // 블로그 결과 (실패해도 0으로 표시)
+    const blogTotal = blogRes.status === 'fulfilled' ? 
+      (blogRes.value.data.data?.total || blogRes.value.data.total || 0) : 0;
+    document.getElementById('blog-count').textContent = blogTotal.toLocaleString() + '건';
     
-    // AI 추천 키워드 표시
-    const aiKeywords = keywordsRes.data.data?.keywords || [];
+    // 뉴스 결과 (실패해도 0으로 표시)
+    const newsTotal = newsRes.status === 'fulfilled' ? 
+      (newsRes.value.data.data?.total || newsRes.value.data.total || 0) : 0;
+    document.getElementById('news-count').textContent = newsTotal.toLocaleString() + '건';
+    
+    // AI 추천 키워드 표시 (keywords가 비어있으면 relatedKeywords 사용)
+    let aiKeywords = [];
+    if (keywordsRes.status === 'fulfilled') {
+      aiKeywords = keywordsRes.value.data.data?.keywords || [];
+      if (aiKeywords.length === 0) {
+        aiKeywords = keywordsRes.value.data.data?.relatedKeywords || [];
+      }
+    }
+    
     const aiKeywordsContainer = document.getElementById('ai-keywords');
     if (aiKeywords.length > 0) {
       aiKeywordsContainer.innerHTML = aiKeywords.map(kw => `
@@ -710,8 +723,9 @@ async function fetchTrendKeywords() {
       aiKeywordsContainer.innerHTML = '<span class="text-gray-400 text-sm">AI 추천 키워드 없음</span>';
     }
     
-    // 블로그 미리보기
-    const blogs = blogRes.data.data?.blogs || [];
+    // 블로그 미리보기 (Promise.allSettled 결과에서 추출)
+    const blogs = blogRes.status === 'fulfilled' ? 
+      (blogRes.value.data.data?.blogs || []) : [];
     const blogPreviewContainer = document.getElementById('blog-preview');
     if (blogs.length > 0) {
       blogPreviewContainer.innerHTML = blogs.slice(0, 5).map(blog => `
@@ -732,7 +746,7 @@ async function fetchTrendKeywords() {
     
   } catch (error) {
     console.error('트렌드 분석 실패:', error);
-    showNotification('트렌드 분석에 실패했습니다', 'error');
+    showNotification('트렌드 분석에 실패했습니다: ' + (error.message || '알 수 없는 오류'), 'error');
   } finally {
     document.getElementById('trend-loading').classList.add('hidden');
   }

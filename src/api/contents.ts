@@ -1,6 +1,12 @@
 /**
  * Contents API Routes
  * 콘텐츠 생성 및 관리 API
+ * 
+ * ★ Gemini 2.0 Flash 올인원 전략 ★
+ * - 텍스트 생성: gemini-2.0-flash (빠르고 저렴)
+ * - 이미지 생성: gemini-2.0-flash-exp-image-generation (같은 Flash 계열, 비용 효율적)
+ * - 한국인/한국배경 자연스러운 아이폰 촬영 스타일
+ * - Imagen 4 대비 훨씬 저렴!
  */
 
 import { Hono } from 'hono';
@@ -10,20 +16,22 @@ import { validateContentGeneration } from '../middleware/security';
 
 type Bindings = {
   DB: D1Database;
-  OPENAI_API_KEY?: string;
 };
 
 const app = new Hono<{ Bindings: Bindings }>();
+
+// ★ Gemini 2.0 Flash 올인원 설정 ★
+const GEMINI_API_KEY = 'AIzaSyApZL4NCnoZZkpS5t7LC7PNSKNeFngBFO0';
+const GEMINI_TEXT_MODEL = 'gemini-2.0-flash';  // 텍스트 생성용
+const GEMINI_IMAGE_MODEL = 'gemini-2.0-flash-exp-image-generation';  // 이미지 생성용 (같은 Flash 계열)
 
 // 콘텐츠 생성 엔드포인트에 검증 미들웨어 적용
 app.use('/generate', validateContentGeneration());
 
 /**
- * OpenAI API를 사용한 콘텐츠 생성
+ * Gemini 2.0 Flash를 사용한 콘텐츠 생성
  */
-async function generateContent(
-  apiKey: string,
-  systemPrompt: string,
+async function generateContentWithGemini(
   keywords: string[],
   title?: string
 ): Promise<{ title: string; content: string; excerpt: string }> {
@@ -155,29 +163,34 @@ async function generateContent(
 
 1500-2000자 분량으로, 독자가 끝까지 읽고 행동하게 만드는 글을 작성.`;
 
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_TEXT_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+  
+  const response = await fetch(url, {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      model: 'gpt-4o-mini',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: optimizedPrompt }
-      ],
-      temperature: 0.7,
-      max_tokens: 3000,
+      contents: [{ parts: [{ text: optimizedPrompt }] }],
+      generationConfig: {
+        temperature: 0.7,
+        maxOutputTokens: 4000,
+      },
     }),
   });
 
   if (!response.ok) {
-    throw new Error(`OpenAI API Error: ${response.status}`);
+    const errorText = await response.text();
+    console.error('Gemini API Error:', response.status, errorText);
+    throw new Error(`Gemini API Error: ${response.status}`);
   }
 
   const data = await response.json();
-  const generatedText = data.choices[0].message.content;
+  const generatedText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  
+  if (!generatedText) {
+    throw new Error('Gemini API returned empty content');
+  }
 
   // 제목과 본문 추출
   const titleMatch = generatedText.match(/<h1>(.*?)<\/h1>/i) || generatedText.match(/^#\s+(.+)$/m);
@@ -194,29 +207,62 @@ async function generateContent(
 }
 
 /**
- * DALL-E를 사용한 이미지 생성
+ * Gemini 2.0 Flash Image Generation을 사용한 이미지 생성
+ * - 한국인/한국 배경 자연스러운 아이폰 촬영 스타일
+ * - AI 느낌 없이 실제 사진처럼 생성
+ * - Imagen 4보다 비용 효율적
  */
-async function generateImage(apiKey: string, prompt: string): Promise<string> {
-  const response = await fetch('https://api.openai.com/v1/images/generations', {
+async function generateImageWithGemini(userPrompt: string, keywords: string[]): Promise<string> {
+  // 한국인/한국 배경 자연스러운 사진 스타일 프롬프트 최적화
+  const enhancedPrompt = `Generate a photorealistic image:
+
+${userPrompt}
+
+CRITICAL STYLE REQUIREMENTS for authentic Korean photo:
+- Real Korean person with natural Korean facial features
+- Modern Seoul urban setting (trendy cafe, Gangnam street, Hongdae area)
+- Candid iPhone 15 Pro photo style - NOT staged or posed
+- Natural soft daylight or warm cafe lighting
+- Realistic skin with natural texture (no airbrushing/filters)
+- Contemporary Korean fashion (modern casual or business casual)
+- Authentic unstaged moment, slightly off-center composition
+- Real-life depth of field, slight background blur
+- NO: AI-generated look, plastic skin, western features, stock photo feel
+- Context keywords: ${keywords.join(', ')}`;
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_IMAGE_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+  
+  const response = await fetch(url, {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      model: 'dall-e-3',
-      prompt: prompt,
-      n: 1,
-      size: '1024x1024',
+      contents: [{ parts: [{ text: enhancedPrompt }] }],
+      generationConfig: {
+        responseModalities: ['IMAGE', 'TEXT']
+      }
     }),
   });
 
   if (!response.ok) {
-    throw new Error(`DALL-E API Error: ${response.status}`);
+    const errorText = await response.text();
+    console.error('Gemini Image API Error:', response.status, errorText);
+    throw new Error(`Gemini Image API Error: ${response.status}`);
   }
 
   const data = await response.json();
-  return data.data[0].url;
+  
+  // 이미지 데이터 추출 (Gemini 응답 구조)
+  const parts = data.candidates?.[0]?.content?.parts || [];
+  const imagePart = parts.find((p: any) => p.inlineData?.mimeType?.startsWith('image/'));
+  
+  if (!imagePart?.inlineData?.data) {
+    throw new Error('Gemini Image API returned no image');
+  }
+
+  const mimeType = imagePart.inlineData.mimeType || 'image/png';
+  return `data:${mimeType};base64,${imagePart.inlineData.data}`;
 }
 
 /**
@@ -276,29 +322,17 @@ app.post('/generate', async (c) => {
       return c.json({ success: false, error: '클라이언트를 찾을 수 없습니다' }, 404);
     }
 
-    // 환경변수에서 OpenAI API 키 가져오기
-    const openaiApiKey = c.env.OPENAI_API_KEY || process.env.OPENAI_API_KEY;
-    
-    if (!openaiApiKey) {
-      return c.json({ success: false, error: 'OpenAI API 키가 설정되지 않았습니다' }, 400);
-    }
-
-    // 콘텐츠 생성
-    const systemPrompt = 
-      'You are a professional content writer. Write engaging, SEO-optimized blog posts with proper HTML structure including H1, H2, H3 tags.';
-
-    const generated = await generateContent(
-      openaiApiKey,
-      systemPrompt,
+    // Gemini 2.0 Flash로 콘텐츠 생성 (OpenAI 키 불필요)
+    const generated = await generateContentWithGemini(
       body.keywords,
       body.title
     );
 
-    // 이미지 생성 (옵션)
+    // Gemini 2.0 Flash로 이미지 생성 (옵션) - 한국인/한국배경 자연스러운 아이폰 스타일
     let imageUrl: string | undefined;
-    if (body.generate_image && openaiApiKey) {
-      const imagePrompt = body.image_prompt || `Professional illustration for: ${generated.title}`;
-      imageUrl = await generateImage(openaiApiKey, imagePrompt);
+    if (body.generate_image) {
+      const imagePrompt = body.image_prompt || `Korean professional in modern Seoul setting related to: ${generated.title}`;
+      imageUrl = await generateImageWithGemini(imagePrompt, body.keywords);
     }
 
     // DB에 저장

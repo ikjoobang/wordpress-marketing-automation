@@ -333,6 +333,29 @@ app.get('/', async (c) => {
 });
 
 /**
+ * 단일 콘텐츠 조회
+ */
+app.get('/:id{[0-9]+}', async (c) => {
+  try {
+    const id = c.req.param('id');
+    const content = await c.env.DB.prepare(
+      'SELECT * FROM contents WHERE id = ?'
+    ).bind(id).first();
+    
+    if (!content) {
+      return c.json({ success: false, error: '콘텐츠를 찾을 수 없습니다' }, 404);
+    }
+    
+    return c.json({ success: true, data: content });
+  } catch (error) {
+    return c.json({ 
+      success: false, 
+      error: error instanceof Error ? error.message : '콘텐츠 조회 실패' 
+    }, 500);
+  }
+});
+
+/**
  * AI 콘텐츠 생성
  */
 app.post('/generate', async (c) => {

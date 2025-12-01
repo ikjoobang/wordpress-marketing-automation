@@ -12,6 +12,57 @@ type Bindings = {
 const app = new Hono<{ Bindings: Bindings }>();
 
 /**
+ * 대시보드 기본 경로 - 전체 통계 반환
+ * GET /api/dashboard
+ */
+app.get('/', async (c) => {
+  try {
+    // 클라이언트 통계
+    const clientStats = await c.env.DB.prepare(`
+      SELECT 
+        COUNT(*) as total,
+        SUM(CASE WHEN is_active = 1 THEN 1 ELSE 0 END) as active
+      FROM clients
+    `).first();
+    
+    // 콘텐츠 통계
+    const contentStats = await c.env.DB.prepare(`
+      SELECT 
+        COUNT(*) as total,
+        SUM(CASE WHEN status = 'draft' THEN 1 ELSE 0 END) as draft,
+        SUM(CASE WHEN status = 'scheduled' THEN 1 ELSE 0 END) as scheduled,
+        SUM(CASE WHEN status = 'published' THEN 1 ELSE 0 END) as published,
+        SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed
+      FROM contents
+    `).first();
+    
+    return c.json({
+      success: true,
+      data: {
+        clients: {
+          total: clientStats?.total || 0,
+          active: clientStats?.active || 0
+        },
+        contents: {
+          total: contentStats?.total || 0,
+          draft: contentStats?.draft || 0,
+          scheduled: contentStats?.scheduled || 0,
+          published: contentStats?.published || 0,
+          failed: contentStats?.failed || 0
+        },
+        timestamp: new Date().toISOString()
+      }
+    });
+  } catch (error) {
+    console.error('Dashboard Error:', error);
+    return c.json({
+      success: false,
+      error: error instanceof Error ? error.message : '대시보드 조회 실패'
+    }, 500);
+  }
+});
+
+/**
  * 대시보드 전체 통계
  * GET /api/dashboard/stats?client_id=1
  */

@@ -40,6 +40,19 @@ app.use('/api/*', cors({
 // 정적 파일 서빙
 app.use('/static/*', serveStatic({ root: './public' }))
 
+// favicon 서빙 (404 에러 방지) - inline SVG 응답
+const faviconSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" rx="20" fill="#3b82f6"/><text x="50" y="68" font-size="50" text-anchor="middle" fill="white" font-family="Arial, sans-serif" font-weight="bold">W</text></svg>`
+app.get('/favicon.ico', (c) => {
+  return new Response(faviconSvg, {
+    headers: { 'Content-Type': 'image/svg+xml', 'Cache-Control': 'public, max-age=86400' }
+  })
+})
+app.get('/favicon.svg', (c) => {
+  return new Response(faviconSvg, {
+    headers: { 'Content-Type': 'image/svg+xml', 'Cache-Control': 'public, max-age=86400' }
+  })
+})
+
 // API 라우트
 app.route('/api/clients', clientsApi)
 app.route('/api/contents', contentsApi)

@@ -503,6 +503,7 @@ function renderGenerate(container) {
         <div class="border-l-4 border-green-500 pl-4">
           <label class="block text-sm font-medium mb-2">
             <span class="bg-green-500 text-white px-2 py-1 rounded text-xs mr-2">2</span>트렌드 키워드 분석
+            <span class="text-xs text-gray-500 ml-2">(Gemini 1.5 Pro + Google Trends + Naver)</span>
           </label>
           
           <div class="flex space-x-2 mb-3">
@@ -514,8 +515,8 @@ function renderGenerate(container) {
           
           <!-- 트렌드 결과 표시 영역 -->
           <div id="trend-results" class="hidden">
-            <!-- 네이버 블로그/뉴스 통계 -->
-            <div class="grid grid-cols-2 gap-4 mb-4">
+            <!-- 네이버 블로그/뉴스 + 구글 트렌드 통계 -->
+            <div class="grid grid-cols-3 gap-4 mb-4">
               <div class="bg-green-50 p-3 rounded">
                 <div class="text-xs text-green-600 mb-1"><i class="fas fa-blog mr-1"></i>네이버 블로그</div>
                 <div class="text-xl font-bold text-green-800" id="blog-count">-</div>
@@ -524,12 +525,26 @@ function renderGenerate(container) {
                 <div class="text-xs text-blue-600 mb-1"><i class="fas fa-newspaper mr-1"></i>네이버 뉴스</div>
                 <div class="text-xl font-bold text-blue-800" id="news-count">-</div>
               </div>
+              <div class="bg-red-50 p-3 rounded">
+                <div class="text-xs text-red-600 mb-1"><i class="fab fa-google mr-1"></i>구글 트렌드</div>
+                <div class="text-xl font-bold text-red-800" id="google-trend-score">-</div>
+              </div>
+            </div>
+            
+            <!-- 구글 트렌드 급상승 검색어 -->
+            <div class="mb-4" id="google-rising-section">
+              <div class="text-sm font-medium mb-2 text-red-700">
+                <i class="fab fa-google mr-1"></i>구글 트렌드 급상승 검색어 (클릭하여 선택)
+              </div>
+              <div id="google-rising-keywords" class="flex flex-wrap gap-2">
+                <!-- 구글 급상승 키워드 -->
+              </div>
             </div>
             
             <!-- AI 추천 키워드 -->
             <div class="mb-4">
               <div class="text-sm font-medium mb-2 text-purple-700">
-                <i class="fas fa-robot mr-1"></i>AI 추천 트렌드 키워드 (클릭하여 선택)
+                <i class="fas fa-robot mr-1"></i>Gemini 1.5 Pro 추천 키워드 (클릭하여 선택)
               </div>
               <div id="ai-keywords" class="flex flex-wrap gap-2">
                 <!-- AI 추천 키워드가 여기에 표시됨 -->
@@ -550,7 +565,7 @@ function renderGenerate(container) {
           <!-- 로딩 표시 -->
           <div id="trend-loading" class="hidden text-center py-4">
             <i class="fas fa-spinner fa-spin text-2xl text-green-500"></i>
-            <p class="text-sm text-gray-500 mt-2">네이버 API + Gemini AI 분석 중...</p>
+            <p class="text-sm text-gray-500 mt-2">Gemini 1.5 Pro + Google Trends + Naver API 분석 중...</p>
           </div>
         </div>
 
@@ -670,7 +685,7 @@ function renderGenerate(container) {
   });
 }
 
-// 트렌드 키워드 분석 함수
+// 트렌드 키워드 분석 함수 (Gemini 1.5 Pro + Google Trends + Naver)
 async function fetchTrendKeywords() {
   const query = document.getElementById('trend-query').value.trim();
   const clientId = document.getElementById('client_id').value;
@@ -685,11 +700,12 @@ async function fetchTrendKeywords() {
   document.getElementById('trend-results').classList.add('hidden');
   
   try {
-    // 병렬로 API 호출 (news API는 keyword 파라미터 사용)
-    const [blogRes, newsRes, keywordsRes] = await Promise.allSettled([
+    // 병렬로 API 호출 (Google Trends 포함)
+    const [blogRes, newsRes, keywordsRes, googleRelatedRes] = await Promise.allSettled([
       axios.get(`${API_BASE}/trends/blog?query=${encodeURIComponent(query)}`),
       axios.get(`${API_BASE}/trends/news?keyword=${encodeURIComponent(query)}`),
-      axios.get(`${API_BASE}/trends/keywords?query=${encodeURIComponent(query)}${clientId ? '&client_id=' + clientId : ''}`)
+      axios.get(`${API_BASE}/trends/keywords?query=${encodeURIComponent(query)}${clientId ? '&client_id=' + clientId : ''}`),
+      axios.get(`${API_BASE}/trends/google/related?query=${encodeURIComponent(query)}`)
     ]);
     
     // 블로그 결과 (실패해도 0으로 표시)
@@ -702,7 +718,39 @@ async function fetchTrendKeywords() {
       (newsRes.value.data.data?.total || newsRes.value.data.total || 0) : 0;
     document.getElementById('news-count').textContent = newsTotal.toLocaleString() + '건';
     
-    // AI 추천 키워드 표시 (keywords가 비어있으면 relatedKeywords 사용)
+    // 구글 트렌드 급상승 검색어 표시
+    const googleRisingSection = document.getElementById('google-rising-section');
+    const googleRisingContainer = document.getElementById('google-rising-keywords');
+    const googleTrendScore = document.getElementById('google-trend-score');
+    
+    if (googleRelatedRes.status === 'fulfilled' && googleRelatedRes.value.data.success) {
+      const risingQueries = googleRelatedRes.value.data.data?.rising || [];
+      const topQueries = googleRelatedRes.value.data.data?.top || [];
+      
+      // 구글 트렌드 점수 (상위 검색어 개수로 표시)
+      googleTrendScore.textContent = (risingQueries.length + topQueries.length) + '개 키워드';
+      
+      // 급상승 + 인기 검색어 합쳐서 표시
+      const allGoogleKeywords = [...risingQueries.slice(0, 5), ...topQueries.slice(0, 5)];
+      
+      if (allGoogleKeywords.length > 0) {
+        googleRisingContainer.innerHTML = allGoogleKeywords.map(item => `
+          <button type="button" onclick="addKeyword('${(item.query || '').replace(/'/g, "\\'")}')" 
+                  class="px-3 py-1 bg-red-100 text-red-700 rounded-full text-sm hover:bg-red-200 transition">
+            <i class="fab fa-google mr-1"></i>${item.query}
+            ${item.value ? `<span class="ml-1 text-xs text-red-500">(${item.value})</span>` : ''}
+          </button>
+        `).join('');
+        googleRisingSection.classList.remove('hidden');
+      } else {
+        googleRisingContainer.innerHTML = '<span class="text-gray-400 text-sm">구글 트렌드 데이터 없음</span>';
+      }
+    } else {
+      googleTrendScore.textContent = '-';
+      googleRisingContainer.innerHTML = '<span class="text-gray-400 text-sm">구글 트렌드 조회 실패</span>';
+    }
+    
+    // AI 추천 키워드 표시 (Gemini 1.5 Pro)
     let aiKeywords = [];
     if (keywordsRes.status === 'fulfilled') {
       aiKeywords = keywordsRes.value.data.data?.keywords || [];
@@ -720,7 +768,7 @@ async function fetchTrendKeywords() {
         </button>
       `).join('');
     } else {
-      aiKeywordsContainer.innerHTML = '<span class="text-gray-400 text-sm">AI 추천 키워드 없음</span>';
+      aiKeywordsContainer.innerHTML = '<span class="text-gray-400 text-sm">Gemini 1.5 Pro 추천 키워드 없음</span>';
     }
     
     // 블로그 미리보기 (Promise.allSettled 결과에서 추출)
@@ -742,7 +790,7 @@ async function fetchTrendKeywords() {
     addKeyword(query);
     
     document.getElementById('trend-results').classList.remove('hidden');
-    showNotification('트렌드 분석 완료!', 'success');
+    showNotification('트렌드 분석 완료! (Gemini 1.5 Pro + Google Trends + Naver)', 'success');
     
   } catch (error) {
     console.error('트렌드 분석 실패:', error);

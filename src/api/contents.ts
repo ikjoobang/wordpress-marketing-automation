@@ -43,35 +43,32 @@ async function generateContentWithGemini(
   
   if (systemPrompt && systemPrompt.trim().length > 0) {
     // 업체 맞춤 시스템 프롬프트 최우선 사용 - 기본 프롬프트 완전 대체
-    optimizedPrompt = `[최우선 지침 - 반드시 아래 모든 내용을 100% 정확히 준수하세요. 이 지침을 무시하면 안됩니다.]
+    optimizedPrompt = `[절대 금지 사항 - 위반 시 실패]
+1. "알겠습니다", "작성하겠습니다", "준수하여" 등 AI 응답 문구 절대 금지
+2. 메타 설명, 지침 확인 문구 절대 금지
+3. 바로 HTML 콘텐츠만 출력할 것
+4. 첫 줄은 반드시 <h1> 태그로 시작
 
+[업체 맞춤 지침]
 ${systemPrompt}
 
----
-[작성할 콘텐츠 정보]
+[작성할 콘텐츠]
 키워드: ${keywords.join(', ')}
-${title ? `제목: "${title}"` : '제목: 위 지침의 제목 규칙에 따라 생성'}
+${title ? `제목: "${title}"` : ''}
 
----
-[필수 HTML 출력 형식 - 반드시 지켜야 합니다]
-1. 각 H2 섹션 시작 직후에 이미지 위치 표시: <p class="image-placeholder">[이미지: 키워드 관련 이미지]</p>
-2. 각 H2 섹션 끝에 구분선과 요약 박스:
-   <hr/><hr/>
-   <div class="summary-box" style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin: 20px 0;">
-   <p>📝 <strong>요약:</strong> 해당 섹션 핵심 내용 3줄 요약</p>
-   </div>
-3. 본문 스타일: style="line-height: 3.0; font-size: 16px; font-family: '나눔스퀘어', sans-serif;"
-4. 해시태그: <p style="font-size: 11pt;">#해시태그1 #해시태그2 ...</p>
-5. 푸터 구조:
-   <footer>
-   <p>💼 프라임에셋(주) ... (CTA 전체 내용)</p>
-   <p>📞 채용 문의: 전화번호</p>
-   <p>🌐 링크</p>
-   <p>✉️ 이메일</p>
-   <hr/>
-   <p>푸터링크들</p>
-   <p>© 2025. 저작권 표기</p>
-   </footer>`;
+[HTML 출력 형식]
+- 첫 줄: <h1>제목</h1> (반드시 H1으로 시작, ## 마크다운 금지)
+- 각 H2 섹션 시작 직후: <p class="image-placeholder">[이미지: 설명]</p>
+- 각 H2 섹션 끝:
+  <hr/><hr/>
+  <div class="summary-box" style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin: 20px 0;">
+  <p>📝 <strong>요약:</strong> 3줄 요약</p>
+  </div>
+- 본문 p태그: style="line-height: 3.0; font-size: 16px;"
+- 해시태그: <p style="font-size: 11pt;">#태그들</p>
+- 푸터: <footer>CTA 내용</footer>
+
+바로 <h1> 태그로 시작하세요. 다른 말 하지 마세요.`;
   } else {
     // 기본 프롬프트 (시스템 프롬프트 없는 경우)
     optimizedPrompt = `키워드: ${keywords.join(', ')}

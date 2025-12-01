@@ -484,4 +484,238 @@ app.delete('/:id', async (c) => {
   }
 });
 
+/**
+ * 콘텐츠 TXT 다운로드
+ * GET /api/contents/:id/download/txt
+ */
+app.get('/:id/download/txt', async (c) => {
+  try {
+    const id = c.req.param('id');
+
+    const content = await c.env.DB.prepare(
+      'SELECT * FROM contents WHERE id = ?'
+    ).bind(id).first() as Content | null;
+
+    if (!content) {
+      return c.json({ success: false, error: '콘텐츠를 찾을 수 없습니다' }, 404);
+    }
+
+    // HTML 태그 제거하여 순수 텍스트로 변환
+    const plainText = content.content
+      .replace(/<h1[^>]*>/gi, '\n\n# ')
+      .replace(/<h2[^>]*>/gi, '\n\n## ')
+      .replace(/<h3[^>]*>/gi, '\n\n### ')
+      .replace(/<\/h[1-3]>/gi, '\n')
+      .replace(/<li[^>]*>/gi, '\n• ')
+      .replace(/<\/li>/gi, '')
+      .replace(/<p[^>]*>/gi, '\n')
+      .replace(/<\/p>/gi, '\n')
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<strong[^>]*>/gi, '**')
+      .replace(/<\/strong>/gi, '**')
+      .replace(/<em[^>]*>/gi, '_')
+      .replace(/<\/em>/gi, '_')
+      .replace(/<[^>]*>/g, '')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+
+    const txtContent = `제목: ${content.title}
+생성일: ${content.created_at}
+상태: ${content.status}
+
+---
+
+${plainText}
+
+---
+워드프레스 마케팅 자동화 시스템에서 생성됨
+`;
+
+    const filename = `${content.title.replace(/[^a-zA-Z0-9가-힣]/g, '_').substring(0, 50)}.txt`;
+
+    return new Response(txtContent, {
+      headers: {
+        'Content-Type': 'text/plain; charset=utf-8',
+        'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`,
+        'Cache-Control': 'no-store',
+      },
+    });
+  } catch (error) {
+    return c.json({ 
+      success: false, 
+      error: error instanceof Error ? error.message : 'TXT 다운로드 실패' 
+    }, 500);
+  }
+});
+
+/**
+ * 콘텐츠 HTML 다운로드
+ * GET /api/contents/:id/download/html
+ */
+app.get('/:id/download/html', async (c) => {
+  try {
+    const id = c.req.param('id');
+
+    const content = await c.env.DB.prepare(
+      'SELECT * FROM contents WHERE id = ?'
+    ).bind(id).first() as Content | null;
+
+    if (!content) {
+      return c.json({ success: false, error: '콘텐츠를 찾을 수 없습니다' }, 404);
+    }
+
+    const htmlContent = `<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${content.title}</title>
+    <style>
+        body { 
+            font-family: 'Noto Sans KR', sans-serif; 
+            max-width: 800px; 
+            margin: 0 auto; 
+            padding: 20px; 
+            line-height: 1.8;
+            color: #333;
+        }
+        h1 { color: #1a1a1a; border-bottom: 2px solid #3b82f6; padding-bottom: 10px; }
+        h2 { color: #2563eb; margin-top: 30px; }
+        h3 { color: #4b5563; }
+        p { margin: 15px 0; }
+        ul, ol { margin: 15px 0; padding-left: 20px; }
+        li { margin: 8px 0; }
+        strong { color: #1f2937; }
+        .meta { color: #6b7280; font-size: 0.9em; margin-bottom: 20px; }
+        .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #e5e7eb; color: #9ca3af; font-size: 0.8em; }
+    </style>
+</head>
+<body>
+    <div class="meta">
+        <p>생성일: ${content.created_at}</p>
+        <p>상태: ${content.status}</p>
+    </div>
+    
+    ${content.content}
+    
+    <div class="footer">
+        <p>워드프레스 마케팅 자동화 시스템에서 생성됨</p>
+    </div>
+</body>
+</html>`;
+
+    const filename = `${content.title.replace(/[^a-zA-Z0-9가-힣]/g, '_').substring(0, 50)}.html`;
+
+    return new Response(htmlContent, {
+      headers: {
+        'Content-Type': 'text/html; charset=utf-8',
+        'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`,
+        'Cache-Control': 'no-store',
+      },
+    });
+  } catch (error) {
+    return c.json({ 
+      success: false, 
+      error: error instanceof Error ? error.message : 'HTML 다운로드 실패' 
+    }, 500);
+  }
+});
+
+/**
+ * 콘텐츠 JSON 내보내기
+ * GET /api/contents/:id/export
+ */
+app.get('/:id/export', async (c) => {
+  try {
+    const id = c.req.param('id');
+
+    const content = await c.env.DB.prepare(
+      'SELECT * FROM contents WHERE id = ?'
+    ).bind(id).first() as Content | null;
+
+    if (!content) {
+      return c.json({ success: false, error: '콘텐츠를 찾을 수 없습니다' }, 404);
+    }
+
+    const exportData = {
+      export_date: new Date().toISOString(),
+      content: {
+        id: content.id,
+        title: content.title,
+        content: content.content,
+        excerpt: content.excerpt,
+        status: content.status,
+        created_at: content.created_at,
+        published_at: content.published_at,
+        wordpress_post_id: content.wordpress_post_id,
+        featured_image_url: content.featured_image_url,
+      }
+    };
+
+    const filename = `content_${content.id}_${new Date().toISOString().split('T')[0]}.json`;
+
+    return new Response(JSON.stringify(exportData, null, 2), {
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`,
+        'Cache-Control': 'no-store',
+      },
+    });
+  } catch (error) {
+    return c.json({ 
+      success: false, 
+      error: error instanceof Error ? error.message : 'JSON 내보내기 실패' 
+    }, 500);
+  }
+});
+
+/**
+ * 전체 콘텐츠 목록 내보내기 (클라이언트별)
+ * GET /api/contents/export/all?client_id=17
+ */
+app.get('/export/all', async (c) => {
+  try {
+    const clientId = c.req.query('client_id');
+
+    let query = 'SELECT * FROM contents';
+    const params: any[] = [];
+
+    if (clientId) {
+      query += ' WHERE client_id = ?';
+      params.push(clientId);
+    }
+
+    query += ' ORDER BY created_at DESC';
+
+    const { results } = await c.env.DB.prepare(query).bind(...params).all();
+
+    const exportData = {
+      export_date: new Date().toISOString(),
+      total_count: results.length,
+      client_id: clientId || 'all',
+      contents: results
+    };
+
+    const filename = `contents_export_${clientId || 'all'}_${new Date().toISOString().split('T')[0]}.json`;
+
+    return new Response(JSON.stringify(exportData, null, 2), {
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`,
+        'Cache-Control': 'no-store',
+      },
+    });
+  } catch (error) {
+    return c.json({ 
+      success: false, 
+      error: error instanceof Error ? error.message : '전체 내보내기 실패' 
+    }, 500);
+  }
+});
+
 export default app;

@@ -12,6 +12,19 @@ type Bindings = {
 const app = new Hono<{ Bindings: Bindings }>();
 
 /**
+ * XSS 방지를 위한 문자열 sanitize
+ */
+function sanitizeString(str: string): string {
+  if (!str) return str;
+  return str
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;')
+    .replace(/\//g, '&#x2F;');
+}
+
+/**
  * 프로젝트 목록 조회
  * GET /api/projects?client_id=1
  */
@@ -121,7 +134,12 @@ app.get('/:id', async (c) => {
 app.post('/', async (c) => {
   try {
     const body = await c.req.json();
-    const { client_id, name, description, category_id, keywords } = body;
+    const { client_id, description, category_id, keywords } = body;
+    
+    // XSS 방지를 위한 입력값 sanitize
+    const name = body.name ? sanitizeString(body.name) : null;
+    const sanitizedDesc = description ? sanitizeString(description) : null;
+    const sanitizedKeywords = keywords ? keywords.map((k: string) => sanitizeString(k)) : null;
     
     if (!client_id || !name) {
       return c.json({
@@ -131,12 +149,12 @@ app.post('/', async (c) => {
     }
     
     const now = new Date().toISOString();
-    const keywordsJson = keywords ? JSON.stringify(keywords) : null;
+    const keywordsJson = sanitizedKeywords ? JSON.stringify(sanitizedKeywords) : null;
     
     const result = await c.env.DB.prepare(`
       INSERT INTO projects (client_id, name, description, category_id, keywords, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).bind(client_id, name, description || null, category_id || null, keywordsJson, now, now).run();
+    `).bind(client_id, name, sanitizedDesc, category_id || null, keywordsJson, now, now).run();
     
     return c.json({
       success: true,

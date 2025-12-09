@@ -263,6 +263,9 @@ async function renderClients(container) {
             </div>
           </div>
           <div class="flex space-x-2">
+            <button onclick="showScheduleSettingsModal(${client.id})" class="text-orange-500 hover:text-orange-700" title="자동 발행 스케줄">
+              <i class="fas fa-clock"></i>
+            </button>
             <button onclick="viewClientStats(${client.id})" class="text-blue-500 hover:text-blue-700" title="통계">
               <i class="fas fa-chart-bar"></i>
             </button>
@@ -347,25 +350,40 @@ async function renderClients(container) {
             <p class="text-xs text-yellow-600 mt-1">💡 SEO, AEO, C-RANK, GEO 최적화 등 원하는 전략을 입력하세요</p>
           </div>
           
-          <!-- 자동 발행 설정 -->
+          <!-- 자동 발행 스케줄 설정 -->
           <div class="border-t pt-4 mt-4">
-            <h4 class="font-medium mb-3 text-blue-700"><i class="fas fa-clock mr-2"></i>자동 발행 설정</h4>
-            <div class="flex items-center mb-3">
-              <input type="checkbox" name="auto_publish" id="auto_publish" class="mr-2 w-4 h-4">
-              <label for="auto_publish" class="text-sm">자동 발행 활성화</label>
-            </div>
-            <div class="grid grid-cols-2 gap-4">
-              <div>
-                <label class="block text-sm font-medium mb-1">발행 시간</label>
-                <input type="time" name="publish_time" value="09:00" class="w-full border rounded px-3 py-2">
+            <h4 class="font-medium mb-3 text-blue-700"><i class="fas fa-clock mr-2"></i>자동 발행 스케줄</h4>
+            <p class="text-sm text-gray-600 mb-3">콘텐츠 생성 시 다음 스케줄에 맞춰 자동 예약됩니다</p>
+            
+            <div class="space-y-3">
+              <!-- 아침 -->
+              <div class="flex items-center space-x-3 p-3 bg-yellow-50 rounded-lg">
+                <input type="checkbox" name="schedule_morning" id="schedule_morning" class="w-5 h-5 text-yellow-500">
+                <label for="schedule_morning" class="flex items-center flex-1">
+                  <i class="fas fa-sun text-yellow-500 mr-2"></i>
+                  <span class="font-medium">아침</span>
+                </label>
+                <input type="time" name="schedule_morning_time" value="09:00" class="border rounded px-2 py-1 w-28">
               </div>
-              <div>
-                <label class="block text-sm font-medium mb-1">발행 빈도</label>
-                <select name="publish_frequency" class="w-full border rounded px-3 py-2">
-                  <option value="daily">매일</option>
-                  <option value="weekdays">평일만</option>
-                  <option value="weekly">매주</option>
-                </select>
+              
+              <!-- 점심 -->
+              <div class="flex items-center space-x-3 p-3 bg-orange-50 rounded-lg">
+                <input type="checkbox" name="schedule_lunch" id="schedule_lunch" class="w-5 h-5 text-orange-500">
+                <label for="schedule_lunch" class="flex items-center flex-1">
+                  <i class="fas fa-utensils text-orange-500 mr-2"></i>
+                  <span class="font-medium">점심</span>
+                </label>
+                <input type="time" name="schedule_lunch_time" value="12:00" class="border rounded px-2 py-1 w-28">
+              </div>
+              
+              <!-- 저녁 -->
+              <div class="flex items-center space-x-3 p-3 bg-indigo-50 rounded-lg">
+                <input type="checkbox" name="schedule_evening" id="schedule_evening" class="w-5 h-5 text-indigo-500">
+                <label for="schedule_evening" class="flex items-center flex-1">
+                  <i class="fas fa-moon text-indigo-500 mr-2"></i>
+                  <span class="font-medium">저녁</span>
+                </label>
+                <input type="time" name="schedule_evening_time" value="18:00" class="border rounded px-2 py-1 w-28">
               </div>
             </div>
           </div>
@@ -389,7 +407,28 @@ async function renderClients(container) {
     const data = Object.fromEntries(formData);
     
     try {
-      await axios.post(`${API_BASE}/clients`, data);
+      // 1. 클라이언트 등록
+      const response = await axios.post(`${API_BASE}/clients`, data);
+      const clientId = response.data.data.id;
+      
+      // 2. 자동 발행 스케줄 저장
+      const schedules = {
+        morning: {
+          is_active: formData.get('schedule_morning') === 'on',
+          time: formData.get('schedule_morning_time') || '09:00'
+        },
+        lunch: {
+          is_active: formData.get('schedule_lunch') === 'on',
+          time: formData.get('schedule_lunch_time') || '12:00'
+        },
+        evening: {
+          is_active: formData.get('schedule_evening') === 'on',
+          time: formData.get('schedule_evening_time') || '18:00'
+        }
+      };
+      
+      await axios.post(`${API_BASE}/clients/${clientId}/schedules`, schedules);
+      
       showNotification('업체가 등록되었습니다', 'success');
       hideAddClientModal();
       await loadClients();
@@ -851,6 +890,136 @@ function showAddClientModal() {
 
 function hideAddClientModal() {
   document.getElementById('add-client-modal').classList.add('hidden');
+}
+
+// 자동 발행 스케줄 설정 모달
+async function showScheduleSettingsModal(clientId) {
+  const client = state.clients.find(c => c.id === clientId);
+  if (!client) return;
+  
+  // 기존 스케줄 로드
+  let schedules = {
+    morning: { is_active: false, time: '09:00' },
+    lunch: { is_active: false, time: '12:00' },
+    evening: { is_active: false, time: '18:00' }
+  };
+  
+  try {
+    const response = await axios.get(`${API_BASE}/clients/${clientId}/schedules`);
+    if (response.data.success) {
+      schedules = response.data.data;
+    }
+  } catch (error) {
+    console.error('스케줄 로드 실패:', error);
+  }
+  
+  const modalHtml = `
+    <div id="schedule-settings-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div class="bg-white rounded-lg w-full max-w-md p-6">
+        <div class="flex justify-between items-center mb-4">
+          <h3 class="text-xl font-bold">
+            <i class="fas fa-clock text-orange-500 mr-2"></i>자동 발행 스케줄
+          </h3>
+          <button onclick="hideScheduleSettingsModal()" class="text-gray-500 hover:text-gray-700">
+            <i class="fas fa-times text-xl"></i>
+          </button>
+        </div>
+        
+        <p class="text-gray-600 mb-4">
+          <strong>${client.name}</strong>의 자동 발행 스케줄 설정
+        </p>
+        <p class="text-sm text-blue-600 mb-4 bg-blue-50 p-2 rounded">
+          <i class="fas fa-info-circle mr-1"></i>
+          콘텐츠 생성 시 다음 스케줄에 맞춰 자동 예약됩니다
+        </p>
+        
+        <form id="schedule-settings-form" class="space-y-3">
+          <!-- 아침 -->
+          <div class="flex items-center space-x-3 p-3 bg-yellow-50 rounded-lg">
+            <input type="checkbox" name="morning_active" id="morning_active" 
+              ${schedules.morning.is_active ? 'checked' : ''} class="w-5 h-5 text-yellow-500">
+            <label for="morning_active" class="flex items-center flex-1">
+              <i class="fas fa-sun text-yellow-500 mr-2"></i>
+              <span class="font-medium">아침</span>
+            </label>
+            <input type="time" name="morning_time" value="${schedules.morning.time}" 
+              class="border rounded px-2 py-1 w-28">
+          </div>
+          
+          <!-- 점심 -->
+          <div class="flex items-center space-x-3 p-3 bg-orange-50 rounded-lg">
+            <input type="checkbox" name="lunch_active" id="lunch_active" 
+              ${schedules.lunch.is_active ? 'checked' : ''} class="w-5 h-5 text-orange-500">
+            <label for="lunch_active" class="flex items-center flex-1">
+              <i class="fas fa-utensils text-orange-500 mr-2"></i>
+              <span class="font-medium">점심</span>
+            </label>
+            <input type="time" name="lunch_time" value="${schedules.lunch.time}" 
+              class="border rounded px-2 py-1 w-28">
+          </div>
+          
+          <!-- 저녁 -->
+          <div class="flex items-center space-x-3 p-3 bg-indigo-50 rounded-lg">
+            <input type="checkbox" name="evening_active" id="evening_active" 
+              ${schedules.evening.is_active ? 'checked' : ''} class="w-5 h-5 text-indigo-500">
+            <label for="evening_active" class="flex items-center flex-1">
+              <i class="fas fa-moon text-indigo-500 mr-2"></i>
+              <span class="font-medium">저녁</span>
+            </label>
+            <input type="time" name="evening_time" value="${schedules.evening.time}" 
+              class="border rounded px-2 py-1 w-28">
+          </div>
+          
+          <div class="flex space-x-3 pt-4">
+            <button type="button" onclick="hideScheduleSettingsModal()" 
+              class="flex-1 px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400">
+              취소
+            </button>
+            <button type="submit" 
+              class="flex-1 px-4 py-2 bg-orange-500 text-white rounded hover:bg-orange-600">
+              <i class="fas fa-save mr-2"></i>저장
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  `;
+  
+  document.body.insertAdjacentHTML('beforeend', modalHtml);
+  
+  // 폼 제출 핸들러
+  document.getElementById('schedule-settings-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    
+    const scheduleData = {
+      morning: {
+        is_active: formData.get('morning_active') === 'on',
+        time: formData.get('morning_time')
+      },
+      lunch: {
+        is_active: formData.get('lunch_active') === 'on',
+        time: formData.get('lunch_time')
+      },
+      evening: {
+        is_active: formData.get('evening_active') === 'on',
+        time: formData.get('evening_time')
+      }
+    };
+    
+    try {
+      await axios.post(`${API_BASE}/clients/${clientId}/schedules`, scheduleData);
+      showNotification('자동 발행 스케줄이 저장되었습니다', 'success');
+      hideScheduleSettingsModal();
+    } catch (error) {
+      showNotification(error.response?.data?.error || '스케줄 저장에 실패했습니다', 'error');
+    }
+  });
+}
+
+function hideScheduleSettingsModal() {
+  const modal = document.getElementById('schedule-settings-modal');
+  if (modal) modal.remove();
 }
 
 function getStatusColor(status) {

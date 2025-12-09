@@ -456,6 +456,58 @@ app.post('/generate', async (c) => {
       }
     }
 
+    // 4단계: 자동 발행 스케줄 확인 및 예약
+    let scheduledAt: string | null = null;
+    let autoScheduled = false;
+    
+    try {
+      // 클라이언트의 활성화된 스케줄 조회
+      const { results: schedules } = await c.env.DB.prepare(`
+        SELECT schedule_type, time FROM client_schedules 
+        WHERE client_id = ? AND is_active = 1
+        ORDER BY time ASC
+      `).bind(body.client_id).all();
+      
+      if (schedules.length > 0) {
+        // 현재 시간 기준으로 다음 발행 시간 계산
+        const now = new Date();
+        const today = now.toISOString().split('T')[0];
+        
+        let nextPublishTime: Date | null = null;
+        
+        for (const schedule of schedules) {
+          const scheduleTime = new Date(`${today}T${schedule.time}:00`);
+          if (scheduleTime > now) {
+            nextPublishTime = scheduleTime;
+            break;
+          }
+        }
+        
+        // 오늘 남은 스케줄이 없으면 내일 첫 스케줄
+        if (!nextPublishTime) {
+          const tomorrow = new Date(now);
+          tomorrow.setDate(tomorrow.getDate() + 1);
+          const tomorrowStr = tomorrow.toISOString().split('T')[0];
+          nextPublishTime = new Date(`${tomorrowStr}T${(schedules[0] as any).time}:00`);
+        }
+        
+        scheduledAt = nextPublishTime.toISOString().slice(0, 19);
+        
+        // 콘텐츠를 scheduled 상태로 업데이트
+        await c.env.DB.prepare(`
+          UPDATE contents 
+          SET status = 'scheduled', scheduled_at = ?
+          WHERE id = ?
+        `).bind(scheduledAt, contentId).run();
+        
+        autoScheduled = true;
+        console.log(`=== 자동 예약 완료: ${scheduledAt} ===`);
+      }
+    } catch (scheduleError) {
+      console.error('자동 예약 중 오류:', scheduleError);
+      // 자동 예약 실패해도 콘텐츠는 유지
+    }
+
     return c.json({ 
       success: true, 
       data: {
@@ -464,11 +516,15 @@ app.post('/generate', async (c) => {
         content: finalContent,
         excerpt: generated.excerpt,
         imageUrl: thumbnailUrl,
-        totalImages: totalImages
+        totalImages: totalImages,
+        scheduledAt: scheduledAt,
+        autoScheduled: autoScheduled
       },
-      message: totalImages > 0 
-        ? `콘텐츠가 생성되었습니다 (이미지 ${totalImages}개 포함)`
-        : '콘텐츠가 생성되었습니다'
+      message: autoScheduled 
+        ? `콘텐츠가 생성되고 ${new Date(scheduledAt!).toLocaleString('ko-KR')}에 자동 예약되었습니다`
+        : (totalImages > 0 
+          ? `콘텐츠가 생성되었습니다 (이미지 ${totalImages}개 포함)`
+          : '콘텐츠가 생성되었습니다')
     });
   } catch (error) {
     return c.json({ 

@@ -685,6 +685,8 @@ app.get('/scheduled/list', async (c) => {
  * 예약 발행 자동 처리 (외부 트리거용 API)
  * - Cloudflare Pages는 Cron을 지원하지 않으므로 외부에서 호출
  * - 예: cron-job.org, GitHub Actions, 또는 수동 호출
+ * - 이미지 플레이스홀더가 남아있으면 발행하지 않고 스킵
+ * - 콘텐츠 내 모든 이미지를 워드프레스에 업로드하고 URL 교체
  */
 app.post('/scheduled/process', async (c) => {
   try {
@@ -713,12 +715,114 @@ app.post('/scheduled/process', async (c) => {
 
     for (const content of scheduled.results as any[]) {
       try {
-        // 시뮬레이션 모드로 발행 (워드프레스 연동 시 실제 발행으로 변경)
+        // 이미지 플레이스홀더 체크 - 플레이스홀더가 남아있으면 스킵
+        if (content.content.includes('class="image-placeholder"') || 
+            content.content.includes('[이미지:')) {
+          await c.env.DB.prepare(`
+            INSERT INTO activity_logs (client_id, action, details, status)
+            VALUES (?, ?, ?, ?)
+          `).bind(
+            content.client_id,
+            'auto_publish_skipped',
+            `[자동발행 스킵] ${content.title}: 이미지 생성이 완료되지 않음`,
+            'warning'
+          ).run();
+          
+          results.push({ 
+            id: content.id, 
+            title: content.title, 
+            status: 'skipped', 
+            reason: '이미지 생성 미완료' 
+          });
+          continue;
+        }
+
+        // 콘텐츠 이미지 ID 목록 조회 (image_data는 개별로 가져옴)
+        const imagesResult = await c.env.DB.prepare(
+          'SELECT id, alt_text, position FROM content_images WHERE content_id = ? ORDER BY position ASC'
+        ).bind(content.id).all();
+        const contentImagesMeta = imagesResult.results || [];
+
+        // 워드프레스 클라이언트 생성
+        const wpClient = new WordPressClient({
+          siteUrl: content.wordpress_url,
+          username: content.wordpress_username,
+          password: content.wordpress_password,
+        });
+
+        // 콘텐츠 내 이미지를 워드프레스에 업로드하고 URL 교체
+        let processedContent = content.content;
+        let featuredMediaId: number | undefined;
+        let uploadedCount = 0;
+
+        // 콘텐츠 이미지들을 워드프레스에 업로드 (각 이미지 데이터를 개별적으로 가져옴)
+        for (const imgMeta of contentImagesMeta as any[]) {
+          try {
+            // 이미지 데이터를 개별적으로 가져옴 (메모리 효율성)
+            const imgData = await c.env.DB.prepare(
+              'SELECT image_data FROM content_images WHERE id = ?'
+            ).bind(imgMeta.id).first() as { image_data: string } | null;
+
+            if (!imgData || !imgData.image_data || imgData.image_data.length === 0) {
+              console.error(`Image ${imgMeta.id} has no image_data, skipping`);
+              continue;
+            }
+
+            // data:image/png;base64, 프리픽스 제거
+            let base64Data = imgData.image_data;
+            if (base64Data.startsWith('data:')) {
+              base64Data = base64Data.split(',')[1] || base64Data;
+            }
+
+            // Base64 이미지 데이터를 Uint8Array로 변환 (Cloudflare Workers 호환)
+            const binaryString = atob(base64Data);
+            const bytes = new Uint8Array(binaryString.length);
+            for (let i = 0; i < binaryString.length; i++) {
+              bytes[i] = binaryString.charCodeAt(i);
+            }
+            const blob = new Blob([bytes], { type: 'image/png' });
+
+            // 워드프레스에 업로드
+            const media = await wpClient.uploadMedia(
+              blob,
+              imgMeta.alt_text || `${content.title} 이미지`,
+              imgMeta.alt_text || content.title
+            );
+
+            // 첫 번째 이미지를 대표 이미지로 설정
+            if (!featuredMediaId) {
+              featuredMediaId = media.id;
+            }
+
+            // 콘텐츠 내 이미지 URL 교체
+            const oldUrl = `/api/contents/${content.id}/images/${imgMeta.id}`;
+            processedContent = processedContent.replace(
+              new RegExp(oldUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'),
+              media.source_url
+            );
+            uploadedCount++;
+          } catch (error) {
+            console.error(`Image upload failed for image ${imgMeta.id}:`, error);
+          }
+        }
+
+        // 워드프레스에 글 발행
+        const wpPost = await wpClient.createPost({
+          title: content.title,
+          content: processedContent,
+          excerpt: content.excerpt || undefined,
+          status: 'publish',
+          featured_media: featuredMediaId,
+          categories: content.categories ? JSON.parse(content.categories) : undefined,
+          tags: content.tags ? JSON.parse(content.tags) : undefined,
+        });
+
+        // DB 업데이트
         await c.env.DB.prepare(`
           UPDATE contents 
-          SET status = 'published', wordpress_post_id = 999999, published_at = CURRENT_TIMESTAMP, scheduled_at = NULL
+          SET status = 'published', wordpress_post_id = ?, published_at = CURRENT_TIMESTAMP, scheduled_at = NULL
           WHERE id = ?
-        `).bind(content.id).run();
+        `).bind(wpPost.id, content.id).run();
 
         await c.env.DB.prepare(`
           INSERT INTO activity_logs (client_id, action, details, status)
@@ -726,12 +830,18 @@ app.post('/scheduled/process', async (c) => {
         `).bind(
           content.client_id,
           'auto_published',
-          `[자동발행] ${content.title}`,
+          `[자동발행] ${content.title} (이미지 ${uploadedCount}개 업로드됨)`,
           'success'
         ).run();
 
         processed++;
-        results.push({ id: content.id, title: content.title, status: 'published' });
+        results.push({ 
+          id: content.id, 
+          title: content.title, 
+          status: 'published',
+          wordpress_post_id: wpPost.id,
+          uploaded_images: uploadedCount
+        });
       } catch (error) {
         await c.env.DB.prepare(`
           INSERT INTO activity_logs (client_id, action, details, status)
@@ -763,6 +873,8 @@ app.post('/scheduled/process', async (c) => {
 
 /**
  * 워드프레스에 발행
+ * - 이미지 플레이스홀더가 남아있으면 발행 차단
+ * - 콘텐츠 내 모든 이미지를 워드프레스에 업로드하고 URL 교체
  */
 app.post('/:id/publish', async (c) => {
   try {
@@ -778,6 +890,15 @@ app.post('/:id/publish', async (c) => {
       return c.json({ success: false, error: '콘텐츠를 찾을 수 없습니다' }, 404);
     }
 
+    // 이미지 플레이스홀더 체크 - 플레이스홀더가 남아있으면 발행 차단
+    if (content.content.includes('class="image-placeholder"') || 
+        content.content.includes('[이미지:')) {
+      return c.json({ 
+        success: false, 
+        error: '이미지가 아직 생성되지 않았습니다. 이미지 생성 후 발행해 주세요.' 
+      }, 400);
+    }
+
     // 클라이언트 정보 조회
     const client = await c.env.DB.prepare(
       'SELECT * FROM clients WHERE id = ?'
@@ -786,6 +907,12 @@ app.post('/:id/publish', async (c) => {
     if (!client) {
       return c.json({ success: false, error: '클라이언트를 찾을 수 없습니다' }, 404);
     }
+
+    // 콘텐츠 이미지 ID 목록 조회 (image_data는 개별로 가져옴)
+    const imagesResult = await c.env.DB.prepare(
+      'SELECT id, alt_text, position FROM content_images WHERE content_id = ? ORDER BY position ASC'
+    ).bind(id).all();
+    const contentImagesMeta = imagesResult.results || [];
 
     // 시뮬레이션 모드: 개발 환경에서 실제 발행 없이 테스트
     if (simulationMode) {
@@ -826,9 +953,65 @@ app.post('/:id/publish', async (c) => {
       password: client.wordpress_password,
     });
 
-    // 이미지가 있으면 먼저 업로드
+    // 콘텐츠 내 이미지를 워드프레스에 업로드하고 URL 교체
+    let processedContent = content.content;
     let featuredMediaId: number | undefined;
-    if (content.featured_image_url) {
+    const uploadedImages: { oldUrl: string; newUrl: string }[] = [];
+
+    // 콘텐츠 이미지들을 워드프레스에 업로드 (각 이미지 데이터를 개별적으로 가져옴)
+    for (const imgMeta of contentImagesMeta as any[]) {
+      try {
+        // 이미지 데이터를 개별적으로 가져옴 (메모리 효율성)
+        const imgData = await c.env.DB.prepare(
+          'SELECT image_data FROM content_images WHERE id = ?'
+        ).bind(imgMeta.id).first() as { image_data: string } | null;
+
+        if (!imgData || !imgData.image_data || imgData.image_data.length === 0) {
+          console.error(`Image ${imgMeta.id} has no image_data, skipping`);
+          continue;
+        }
+
+        // data:image/png;base64, 프리픽스 제거
+        let base64Data = imgData.image_data;
+        if (base64Data.startsWith('data:')) {
+          base64Data = base64Data.split(',')[1] || base64Data;
+        }
+
+        // Base64 이미지 데이터를 Uint8Array로 변환 (Cloudflare Workers 호환)
+        const binaryString = atob(base64Data);
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+        const blob = new Blob([bytes], { type: 'image/png' });
+
+        // 워드프레스에 업로드
+        const media = await wpClient.uploadMedia(
+          blob,
+          imgMeta.alt_text || `${content.title} 이미지`,
+          imgMeta.alt_text || content.title
+        );
+
+        // 첫 번째 이미지를 대표 이미지로 설정
+        if (!featuredMediaId) {
+          featuredMediaId = media.id;
+        }
+
+        // 콘텐츠 내 이미지 URL 교체
+        const oldUrl = `/api/contents/${id}/images/${imgMeta.id}`;
+        processedContent = processedContent.replace(
+          new RegExp(oldUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'),
+          media.source_url
+        );
+        uploadedImages.push({ oldUrl, newUrl: media.source_url });
+      } catch (error) {
+        console.error(`Image upload failed for image ${imgMeta.id}:`, error);
+        // 이미지 업로드 실패해도 계속 진행
+      }
+    }
+
+    // 기존 featured_image_url이 있으면 업로드
+    if (!featuredMediaId && content.featured_image_url) {
       try {
         const media = await wpClient.uploadMediaFromUrl(
           content.featured_image_url,
@@ -837,14 +1020,14 @@ app.post('/:id/publish', async (c) => {
         );
         featuredMediaId = media.id;
       } catch (error) {
-        console.error('Image upload failed:', error);
+        console.error('Featured image upload failed:', error);
       }
     }
 
     // 워드프레스에 글 발행
     const wpPost = await wpClient.createPost({
       title: content.title,
-      content: content.content,
+      content: processedContent,
       excerpt: content.excerpt,
       status: 'publish',
       featured_media: featuredMediaId,
@@ -866,13 +1049,16 @@ app.post('/:id/publish', async (c) => {
     `).bind(
       content.client_id,
       'content_published',
-      `워드프레스 발행: ${content.title}`,
+      `워드프레스 발행: ${content.title} (이미지 ${uploadedImages.length}개 업로드됨)`,
       'success'
     ).run();
 
     return c.json({ 
       success: true, 
-      data: { wordpress_post_id: wpPost.id },
+      data: { 
+        wordpress_post_id: wpPost.id,
+        uploaded_images: uploadedImages.length
+      },
       message: '콘텐츠가 워드프레스에 발행되었습니다'
     });
   } catch (error) {
@@ -1222,6 +1408,113 @@ app.get('/:contentId/images', async (c) => {
     return c.json({ 
       success: false, 
       error: error instanceof Error ? error.message : '이미지 목록 조회 실패' 
+    }, 500);
+  }
+});
+
+/**
+ * 디버그: 이미지 업로드 테스트
+ * 단일 이미지를 워드프레스에 업로드하고 결과 반환
+ */
+app.post('/:contentId/images/:imageId/upload-test', async (c) => {
+  try {
+    const contentId = c.req.param('contentId');
+    const imageId = c.req.param('imageId');
+
+    // 콘텐츠 조회
+    const content = await c.env.DB.prepare(
+      'SELECT * FROM contents WHERE id = ?'
+    ).bind(contentId).first() as Content | null;
+
+    if (!content) {
+      return c.json({ success: false, error: '콘텐츠를 찾을 수 없습니다' }, 404);
+    }
+
+    // 클라이언트 정보 조회
+    const client = await c.env.DB.prepare(
+      'SELECT * FROM clients WHERE id = ?'
+    ).bind(content.client_id).first() as Client | null;
+
+    if (!client) {
+      return c.json({ success: false, error: '클라이언트를 찾을 수 없습니다' }, 404);
+    }
+
+    // 이미지 메타 정보 조회
+    const imgMeta = await c.env.DB.prepare(
+      'SELECT id, alt_text FROM content_images WHERE id = ?'
+    ).bind(imageId).first() as { id: number; alt_text: string } | null;
+
+    if (!imgMeta) {
+      return c.json({ success: false, error: '이미지를 찾을 수 없습니다' }, 404);
+    }
+
+    // 이미지 데이터 조회
+    const imgData = await c.env.DB.prepare(
+      'SELECT image_data FROM content_images WHERE id = ?'
+    ).bind(imageId).first() as { image_data: string } | null;
+
+    if (!imgData || !imgData.image_data) {
+      return c.json({ 
+        success: false, 
+        error: 'image_data가 없습니다',
+        debug: { hasImgData: !!imgData }
+      }, 400);
+    }
+
+    // data:image/png;base64, 프리픽스 제거
+    let base64Data = imgData.image_data;
+    if (base64Data.startsWith('data:')) {
+      base64Data = base64Data.split(',')[1] || base64Data;
+    }
+    const dataLength = base64Data.length;
+
+    // Base64 디코딩
+    let binaryString: string;
+    try {
+      binaryString = atob(base64Data);
+    } catch (atobError) {
+      return c.json({ 
+        success: false, 
+        error: 'Base64 디코딩 실패',
+        debug: { dataLength, atobError: String(atobError), prefix: base64Data.substring(0, 50) }
+      }, 500);
+    }
+
+    // Uint8Array로 변환
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    const blob = new Blob([bytes], { type: 'image/png' });
+
+    // 워드프레스 클라이언트 생성
+    const wpClient = new WordPressClient({
+      siteUrl: client.wordpress_url,
+      username: client.wordpress_username,
+      password: client.wordpress_password,
+    });
+
+    // 워드프레스에 업로드
+    const media = await wpClient.uploadMedia(
+      blob,
+      imgMeta.alt_text || `테스트 이미지`,
+      imgMeta.alt_text || '테스트'
+    );
+
+    return c.json({ 
+      success: true, 
+      data: {
+        wordpress_media_id: media.id,
+        wordpress_url: media.source_url,
+        original_data_length: dataLength,
+        blob_size: blob.size
+      }
+    });
+  } catch (error) {
+    return c.json({ 
+      success: false, 
+      error: error instanceof Error ? error.message : '이미지 업로드 테스트 실패',
+      stack: error instanceof Error ? error.stack : undefined
     }, 500);
   }
 });

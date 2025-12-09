@@ -130,10 +130,17 @@ export class WordPressClient {
 
   /**
    * 미디어 업로드 (이미지)
+   * @param file - File 또는 Blob 객체
+   * @param title - 미디어 제목
+   * @param altText - 대체 텍스트
+   * @param filename - 파일명 (Blob일 경우 필수, 기본값: image.png)
    */
-  async uploadMedia(file: File | Blob, title: string, altText?: string) {
+  async uploadMedia(file: File | Blob, title: string, altText?: string, filename?: string) {
     const formData = new FormData();
-    formData.append('file', file);
+    
+    // Blob에 파일명 지정 (워드프레스가 파일 유형을 인식하도록)
+    const finalFilename = filename || (file instanceof File ? file.name : `image_${Date.now()}.png`);
+    formData.append('file', file, finalFilename);
     formData.append('title', title);
     if (altText) {
       formData.append('alt_text', altText);

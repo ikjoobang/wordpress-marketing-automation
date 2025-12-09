@@ -496,8 +496,8 @@ async function loadContents() {
                 <i class="fas fa-paper-plane"></i>
               </button>
             ` : ''}
-            ${content.wordpress_post_id ? `
-              <a href="#" class="text-blue-500 hover:text-blue-700" title="워드프레스에서 보기">
+            ${content.wordpress_post_id && content.client_wordpress_url ? `
+              <a href="${content.client_wordpress_url}?p=${content.wordpress_post_id}" target="_blank" class="text-blue-500 hover:text-blue-700" title="워드프레스에서 보기">
                 <i class="fas fa-external-link-alt"></i>
               </a>
             ` : ''}

@@ -323,20 +323,26 @@ app.get('/', async (c) => {
     const clientId = c.req.query('client_id');
     const status = c.req.query('status');
 
-    let query = 'SELECT * FROM contents WHERE 1=1';
+    // JOIN clients to get wordpress_url for each content
+    let query = `
+      SELECT c.*, cl.wordpress_url as client_wordpress_url 
+      FROM contents c 
+      LEFT JOIN clients cl ON c.client_id = cl.id 
+      WHERE 1=1
+    `;
     const params: any[] = [];
 
     if (clientId) {
-      query += ' AND client_id = ?';
+      query += ' AND c.client_id = ?';
       params.push(clientId);
     }
 
     if (status) {
-      query += ' AND status = ?';
+      query += ' AND c.status = ?';
       params.push(status);
     }
 
-    query += ' ORDER BY created_at DESC';
+    query += ' ORDER BY c.created_at DESC';
 
     const { results } = await c.env.DB.prepare(query).bind(...params).all();
 

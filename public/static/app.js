@@ -24,42 +24,91 @@ function renderApp() {
   const app = document.getElementById('app');
   
   app.innerHTML = `
-    <div class="min-h-screen bg-gray-100">
+    <div class="min-h-screen" style="background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);">
+      <!-- 스킵 링크 (접근성) -->
+      <a href="#main-content" class="skip-link">메인 콘텐츠로 건너뛰기</a>
+      
       <!-- 헤더 -->
-      <header class="bg-white shadow-md">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+      <header class="bg-white/80 backdrop-blur-md shadow-sm sticky top-0 z-40 border-b border-gray-100">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
           <div class="flex justify-between items-center">
-            <h1 class="text-2xl font-bold text-gray-900">
-              <i class="fas fa-rocket text-blue-500 mr-2"></i>
-              워드프레스 마케팅 자동화
+            <h1 class="text-xl md:text-2xl font-bold text-gray-900 flex items-center gap-2">
+              <span class="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center text-white shadow-lg">
+                <i class="fas fa-rocket"></i>
+              </span>
+              <span class="hidden sm:inline">워드프레스 마케팅 자동화</span>
+              <span class="sm:hidden">WP 자동화</span>
             </h1>
-            <nav class="flex space-x-4">
-              <button onclick="setView('dashboard')" class="px-4 py-2 rounded hover:bg-gray-100" id="nav-dashboard">
+            
+            <!-- 데스크톱 네비게이션 -->
+            <nav class="hidden md:flex items-center gap-1">
+              <button onclick="setView('dashboard')" class="nav-btn px-4 py-2.5 rounded-xl font-medium transition-all duration-200" id="nav-dashboard">
                 <i class="fas fa-home mr-2"></i>대시보드
               </button>
-              <button onclick="setView('clients')" class="px-4 py-2 rounded hover:bg-gray-100" id="nav-clients">
+              <button onclick="setView('clients')" class="nav-btn px-4 py-2.5 rounded-xl font-medium transition-all duration-200" id="nav-clients">
                 <i class="fas fa-building mr-2"></i>업체 관리
               </button>
-              <button onclick="setView('contents')" class="px-4 py-2 rounded hover:bg-gray-100" id="nav-contents">
+              <button onclick="setView('contents')" class="nav-btn px-4 py-2.5 rounded-xl font-medium transition-all duration-200" id="nav-contents">
                 <i class="fas fa-file-alt mr-2"></i>콘텐츠
               </button>
-              <button onclick="setView('generate')" class="px-4 py-2 rounded hover:bg-gray-100 bg-blue-500 text-white" id="nav-generate">
+              <button onclick="setView('generate')" class="nav-btn px-4 py-2.5 rounded-xl font-medium transition-all duration-200 bg-gradient-to-r from-purple-500 to-blue-500 text-white shadow-md hover:shadow-lg" id="nav-generate">
                 <i class="fas fa-magic mr-2"></i>AI 생성
               </button>
-              <button onclick="setView('customize')" class="px-4 py-2 rounded hover:bg-gray-100" id="nav-customize">
+              <button onclick="setView('customize')" class="nav-btn px-4 py-2.5 rounded-xl font-medium transition-all duration-200" id="nav-customize">
                 <i class="fas fa-paint-brush mr-2"></i>블로그 꾸미기
               </button>
+              
+              <!-- 다크모드 토글 -->
+              <button onclick="toggleDarkMode()" class="ml-2 p-2.5 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors" title="다크모드 전환">
+                <i class="fas fa-moon text-gray-600 dark:text-yellow-400" id="dark-mode-icon"></i>
+              </button>
             </nav>
+            
+            <!-- 모바일 메뉴 버튼 -->
+            <button onclick="toggleMobileMenu()" class="md:hidden p-2.5 rounded-xl hover:bg-gray-100">
+              <i class="fas fa-bars text-xl text-gray-600"></i>
+            </button>
           </div>
+          
+          <!-- 모바일 네비게이션 -->
+          <nav id="mobile-nav" class="hidden md:hidden pt-4 pb-2 border-t border-gray-100 mt-3">
+            <div class="grid grid-cols-2 gap-2">
+              <button onclick="setView('dashboard'); toggleMobileMenu();" class="mobile-nav-btn p-3 rounded-xl text-left" id="mobile-nav-dashboard">
+                <i class="fas fa-home mr-2 text-blue-500"></i>대시보드
+              </button>
+              <button onclick="setView('clients'); toggleMobileMenu();" class="mobile-nav-btn p-3 rounded-xl text-left" id="mobile-nav-clients">
+                <i class="fas fa-building mr-2 text-green-500"></i>업체 관리
+              </button>
+              <button onclick="setView('contents'); toggleMobileMenu();" class="mobile-nav-btn p-3 rounded-xl text-left" id="mobile-nav-contents">
+                <i class="fas fa-file-alt mr-2 text-purple-500"></i>콘텐츠
+              </button>
+              <button onclick="setView('generate'); toggleMobileMenu();" class="mobile-nav-btn p-3 rounded-xl text-left bg-gradient-to-r from-purple-500 to-blue-500 text-white" id="mobile-nav-generate">
+                <i class="fas fa-magic mr-2"></i>AI 생성
+              </button>
+              <button onclick="setView('customize'); toggleMobileMenu();" class="mobile-nav-btn p-3 rounded-xl text-left col-span-2" id="mobile-nav-customize">
+                <i class="fas fa-paint-brush mr-2 text-pink-500"></i>블로그 꾸미기
+              </button>
+            </div>
+          </nav>
         </div>
       </header>
 
       <!-- 메인 컨텐츠 -->
-      <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div id="main-content"></div>
+      <main id="main-content-wrapper" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8">
+        <div id="main-content" class="fade-in"></div>
       </main>
+      
+      <!-- 푸터 -->
+      <footer class="bg-white/60 backdrop-blur-sm border-t border-gray-100 py-6 mt-auto">
+        <div class="max-w-7xl mx-auto px-4 text-center text-sm text-gray-500">
+          <p>© 2025 워드프레스 마케팅 자동화. SEO · AEO · C-RANK · GEO 최적화</p>
+        </div>
+      </footer>
     </div>
   `;
+  
+  // 다크모드 상태 확인
+  checkDarkMode();
 
   updateView();
 }
@@ -70,18 +119,66 @@ function setView(view) {
   updateView();
 }
 
+// 모바일 메뉴 토글
+function toggleMobileMenu() {
+  const mobileNav = document.getElementById('mobile-nav');
+  mobileNav.classList.toggle('hidden');
+}
+
+// 다크모드 토글
+function toggleDarkMode() {
+  const isDark = document.documentElement.classList.toggle('dark');
+  localStorage.setItem('darkMode', isDark ? 'true' : 'false');
+  updateDarkModeIcon();
+}
+
+// 다크모드 상태 확인
+function checkDarkMode() {
+  const savedMode = localStorage.getItem('darkMode');
+  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  
+  if (savedMode === 'true' || (savedMode === null && prefersDark)) {
+    document.documentElement.classList.add('dark');
+  }
+  updateDarkModeIcon();
+}
+
+// 다크모드 아이콘 업데이트
+function updateDarkModeIcon() {
+  const icon = document.getElementById('dark-mode-icon');
+  if (icon) {
+    const isDark = document.documentElement.classList.contains('dark');
+    icon.className = isDark ? 'fas fa-sun text-yellow-400' : 'fas fa-moon text-gray-600';
+  }
+}
+
 // 뷰 업데이트
 function updateView() {
-  // 네비게이션 활성화 상태 업데이트
-  document.querySelectorAll('nav button').forEach(btn => {
-    btn.classList.remove('bg-blue-500', 'text-white');
-    btn.classList.add('hover:bg-gray-100');
+  // 네비게이션 활성화 상태 업데이트 (데스크톱)
+  document.querySelectorAll('.nav-btn').forEach(btn => {
+    if (!btn.id.includes('generate')) {
+      btn.classList.remove('bg-blue-500', 'text-white', 'shadow-md');
+      btn.classList.add('hover:bg-gray-100', 'text-gray-700');
+    }
+  });
+  
+  // 모바일 네비게이션도 업데이트
+  document.querySelectorAll('.mobile-nav-btn').forEach(btn => {
+    if (!btn.id.includes('generate')) {
+      btn.classList.remove('bg-blue-100');
+    }
   });
   
   const activeBtn = document.getElementById(`nav-${state.currentView}`);
-  if (activeBtn) {
-    activeBtn.classList.add('bg-blue-500', 'text-white');
-    activeBtn.classList.remove('hover:bg-gray-100');
+  const mobileActiveBtn = document.getElementById(`mobile-nav-${state.currentView}`);
+  
+  if (activeBtn && !activeBtn.id.includes('generate')) {
+    activeBtn.classList.add('bg-blue-500', 'text-white', 'shadow-md');
+    activeBtn.classList.remove('hover:bg-gray-100', 'text-gray-700');
+  }
+  
+  if (mobileActiveBtn && !mobileActiveBtn.id.includes('generate')) {
+    mobileActiveBtn.classList.add('bg-blue-100');
   }
 
   const content = document.getElementById('main-content');
@@ -108,71 +205,112 @@ function updateView() {
 // 대시보드 렌더링
 function renderDashboard(container) {
   container.innerHTML = `
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-      <div class="bg-white rounded-lg shadow p-6">
+    <!-- 환영 메시지 -->
+    <div class="mb-8">
+      <h2 class="text-2xl md:text-3xl font-bold text-gray-900 mb-2">
+        안녕하세요! 👋
+      </h2>
+      <p class="text-gray-600">오늘도 효율적인 마케팅 자동화를 시작해보세요.</p>
+    </div>
+    
+    <!-- 통계 카드 -->
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-8">
+      <div class="stat-card bg-white rounded-2xl p-5 md:p-6 border border-gray-100 hover:shadow-xl transition-all duration-300">
         <div class="flex items-center justify-between">
           <div>
-            <p class="text-gray-500 text-sm">전체 업체</p>
-            <p class="text-3xl font-bold text-gray-900" id="stat-clients">0</p>
+            <p class="text-gray-500 text-sm font-medium mb-1">전체 업체</p>
+            <p class="text-3xl md:text-4xl font-extrabold text-gray-900" id="stat-clients">0</p>
           </div>
-          <i class="fas fa-building text-4xl text-blue-500"></i>
+          <div class="w-14 h-14 bg-gradient-to-br from-blue-400 to-blue-600 rounded-2xl flex items-center justify-center shadow-lg">
+            <i class="fas fa-building text-2xl text-white"></i>
+          </div>
         </div>
       </div>
       
-      <div class="bg-white rounded-lg shadow p-6">
+      <div class="stat-card bg-white rounded-2xl p-5 md:p-6 border border-gray-100 hover:shadow-xl transition-all duration-300">
         <div class="flex items-center justify-between">
           <div>
-            <p class="text-gray-500 text-sm">총 콘텐츠</p>
-            <p class="text-3xl font-bold text-gray-900" id="stat-contents">0</p>
+            <p class="text-gray-500 text-sm font-medium mb-1">총 콘텐츠</p>
+            <p class="text-3xl md:text-4xl font-extrabold text-gray-900" id="stat-contents">0</p>
           </div>
-          <i class="fas fa-file-alt text-4xl text-green-500"></i>
+          <div class="w-14 h-14 bg-gradient-to-br from-green-400 to-green-600 rounded-2xl flex items-center justify-center shadow-lg">
+            <i class="fas fa-file-alt text-2xl text-white"></i>
+          </div>
         </div>
       </div>
       
-      <div class="bg-white rounded-lg shadow p-6">
+      <div class="stat-card bg-white rounded-2xl p-5 md:p-6 border border-gray-100 hover:shadow-xl transition-all duration-300">
         <div class="flex items-center justify-between">
           <div>
-            <p class="text-gray-500 text-sm">발행 완료</p>
-            <p class="text-3xl font-bold text-gray-900" id="stat-published">0</p>
+            <p class="text-gray-500 text-sm font-medium mb-1">발행 완료</p>
+            <p class="text-3xl md:text-4xl font-extrabold text-gray-900" id="stat-published">0</p>
           </div>
-          <i class="fas fa-check-circle text-4xl text-purple-500"></i>
+          <div class="w-14 h-14 bg-gradient-to-br from-purple-400 to-purple-600 rounded-2xl flex items-center justify-center shadow-lg">
+            <i class="fas fa-check-circle text-2xl text-white"></i>
+          </div>
         </div>
       </div>
       
-      <div class="bg-white rounded-lg shadow p-6">
+      <div class="stat-card bg-white rounded-2xl p-5 md:p-6 border border-gray-100 hover:shadow-xl transition-all duration-300">
         <div class="flex items-center justify-between">
           <div>
-            <p class="text-gray-500 text-sm">예약 대기</p>
-            <p class="text-3xl font-bold text-gray-900" id="stat-scheduled">0</p>
+            <p class="text-gray-500 text-sm font-medium mb-1">예약 대기</p>
+            <p class="text-3xl md:text-4xl font-extrabold text-gray-900" id="stat-scheduled">0</p>
           </div>
-          <i class="fas fa-clock text-4xl text-orange-500"></i>
+          <div class="w-14 h-14 bg-gradient-to-br from-orange-400 to-orange-600 rounded-2xl flex items-center justify-center shadow-lg">
+            <i class="fas fa-clock text-2xl text-white"></i>
+          </div>
         </div>
       </div>
     </div>
 
-    <div class="bg-white rounded-lg shadow p-6">
-      <h2 class="text-xl font-bold mb-4">
-        <i class="fas fa-chart-line mr-2"></i>빠른 시작
+    <!-- 빠른 시작 카드 -->
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 md:p-8">
+      <h2 class="text-xl font-bold mb-6 flex items-center gap-2">
+        <span class="w-8 h-8 bg-gradient-to-br from-indigo-400 to-indigo-600 rounded-lg flex items-center justify-center">
+          <i class="fas fa-bolt text-white text-sm"></i>
+        </span>
+        빠른 시작
       </h2>
       <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <button onclick="setView('clients')" class="p-6 border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition">
-          <i class="fas fa-plus-circle text-3xl text-blue-500 mb-2"></i>
-          <p class="font-semibold">새 업체 등록</p>
+        <button onclick="setView('clients')" class="group p-6 border-2 border-dashed border-gray-200 rounded-2xl hover:border-blue-400 hover:bg-blue-50/50 transition-all duration-300 text-left">
+          <div class="w-12 h-12 bg-blue-100 group-hover:bg-blue-500 rounded-xl flex items-center justify-center mb-4 transition-all duration-300">
+            <i class="fas fa-plus-circle text-xl text-blue-500 group-hover:text-white transition-colors"></i>
+          </div>
+          <p class="font-bold text-gray-900 mb-1">새 업체 등록</p>
           <p class="text-sm text-gray-500">워드프레스 사이트 연결</p>
         </button>
         
-        <button onclick="setView('generate')" class="p-6 border-2 border-dashed border-gray-300 rounded-lg hover:border-green-500 hover:bg-green-50 transition">
-          <i class="fas fa-magic text-3xl text-green-500 mb-2"></i>
-          <p class="font-semibold">AI 콘텐츠 생성</p>
+        <button onclick="setView('generate')" class="group p-6 border-2 border-dashed border-gray-200 rounded-2xl hover:border-green-400 hover:bg-green-50/50 transition-all duration-300 text-left">
+          <div class="w-12 h-12 bg-green-100 group-hover:bg-green-500 rounded-xl flex items-center justify-center mb-4 transition-all duration-300">
+            <i class="fas fa-magic text-xl text-green-500 group-hover:text-white transition-colors"></i>
+          </div>
+          <p class="font-bold text-gray-900 mb-1">AI 콘텐츠 생성</p>
           <p class="text-sm text-gray-500">자동으로 글 작성하기</p>
         </button>
         
-        <button onclick="setView('contents')" class="p-6 border-2 border-dashed border-gray-300 rounded-lg hover:border-purple-500 hover:bg-purple-50 transition">
-          <i class="fas fa-list text-3xl text-purple-500 mb-2"></i>
-          <p class="font-semibold">콘텐츠 관리</p>
+        <button onclick="setView('contents')" class="group p-6 border-2 border-dashed border-gray-200 rounded-2xl hover:border-purple-400 hover:bg-purple-50/50 transition-all duration-300 text-left">
+          <div class="w-12 h-12 bg-purple-100 group-hover:bg-purple-500 rounded-xl flex items-center justify-center mb-4 transition-all duration-300">
+            <i class="fas fa-list text-xl text-purple-500 group-hover:text-white transition-colors"></i>
+          </div>
+          <p class="font-bold text-gray-900 mb-1">콘텐츠 관리</p>
           <p class="text-sm text-gray-500">작성된 글 확인하기</p>
         </button>
       </div>
+    </div>
+    
+    <!-- 최적화 기능 안내 -->
+    <div class="mt-6 bg-gradient-to-r from-purple-50 via-blue-50 to-green-50 rounded-2xl p-6 border border-purple-100">
+      <h3 class="font-bold text-gray-800 mb-4 flex items-center gap-2">
+        <i class="fas fa-sparkles text-purple-500"></i>
+        자동 최적화 기능
+      </h3>
+      <ul class="check-list space-y-2 text-gray-700">
+        <li class="flex items-center gap-2"><span class="text-green-500">✔️</span> <strong>SEO</strong> 검색엔진 최적화 - 키워드 밀도 2-3% 자동 조절</li>
+        <li class="flex items-center gap-2"><span class="text-green-500">✔️</span> <strong>AEO</strong> AI 답변 최적화 - 질의응답 형태 콘텐츠 구조화</li>
+        <li class="flex items-center gap-2"><span class="text-green-500">✔️</span> <strong>C-RANK</strong> 네이버 블로그 지수 최적화</li>
+        <li class="flex items-center gap-2"><span class="text-green-500">✔️</span> <strong>GEO</strong> 지역 기반 검색 최적화</li>
+      </ul>
     </div>
   `;
 
